@@ -1,6 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
-import { NeighborhoodCard } from "@/components/neighborhoods/neighborhood-card";
-import { neighborhoods } from "@/lib/mock-data";
+import { NeighborhoodsClient } from "@/components/neighborhoods/neighborhoods-client";
 
 export default function NeighborhoodsPage() {
   return (
@@ -15,11 +14,7 @@ export default function NeighborhoodsPage() {
             기획안의 카드 구조를 확인하기 위한 placeholder입니다.
           </p>
         </div>
-        <div className="grid gap-4">
-          {neighborhoods.map((neighborhood) => (
-            <NeighborhoodCard key={neighborhood.id} {...neighborhood} />
-          ))}
-        </div>
+        <NeighborhoodsClient />
       </div>
     </AppShell>
   );

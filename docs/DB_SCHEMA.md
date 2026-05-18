@@ -1,6 +1,6 @@
 # DB Schema
 
-Supabase PostgreSQL 기준 초안입니다. 첫 커밋에서는 migration을 적용하지 않고 문서로 설계를 고정합니다.
+Supabase PostgreSQL 기준 초안입니다. 실제 초기 migration은 `supabase/migrations/20260518000100_initial_core.sql`에 있습니다.
 
 ## 공통 원칙
 

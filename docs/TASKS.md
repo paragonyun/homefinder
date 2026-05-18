@@ -22,13 +22,15 @@
 ## 다음 단계: DB와 CRUD
 
 - [ ] Supabase 프로젝트 생성
-- [ ] migration 작성
-- [ ] RLS 정책 작성
-- [ ] Supabase Auth 연결
-- [ ] 동네 CRUD
-- [ ] 단지 CRUD
-- [ ] 임장 메모 CRUD
-- [ ] 상태 변경 UI
+- [x] migration 작성
+- [x] RLS 정책 작성
+- [x] Supabase Auth 연결
+- [x] 동네 CRUD
+- [x] 단지 CRUD
+- [x] 임장 메모 CRUD
+- [x] 상태 변경 UI
+- [ ] Supabase 환경변수 Vercel 등록
+- [ ] Supabase migration 실제 적용
 
 ## 데이터 연동
 

@@ -41,6 +41,31 @@ TRANSIT_API_KEY=
 NEXT_PUBLIC_APP_URL=
 ```
 
+## Supabase 적용
+
+Supabase 프로젝트를 만든 뒤 SQL Editor 또는 Supabase CLI로 migration을 적용합니다.
+
+```bash
+supabase db push
+```
+
+현재 포함된 migration은 다음을 만듭니다.
+
+- `users`
+- `neighborhoods`
+- `apartments`
+- `field_notes`
+- `raw_api_responses`
+- `apartment_status`, `confidence_level` enum
+- 사용자별 RLS 정책
+
+Vercel에는 최소한 아래 환경변수를 추가해야 실제 로그인과 CRUD가 동작합니다.
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+`SUPABASE_SERVICE_ROLE_KEY`는 후속 서버 배치나 외부 API 동기화에서만 사용합니다.
+
 ## 핵심 원칙
 
 - 공식 API와 공공데이터를 우선 사용합니다.

@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { ApartmentRow } from "@/components/apartments/apartment-row";
+import { ApartmentsClient } from "@/components/apartments/apartments-client";
 import { AppShell } from "@/components/layout/app-shell";
-import { apartments } from "@/lib/mock-data";
 
 export default function ApartmentsPage() {
   return (
@@ -24,27 +23,10 @@ export default function ApartmentsPage() {
             단지 추가
           </Link>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-left">
-            <thead className="bg-slate-50 text-sm text-slate-600">
-              <tr>
-                <th className="px-4 py-3 font-semibold">단지</th>
-                <th className="px-4 py-3 font-semibold">동네</th>
-                <th className="px-4 py-3 font-semibold">상태</th>
-                <th className="px-4 py-3 font-semibold">최근가</th>
-                <th className="px-4 py-3 font-semibold">평형대</th>
-                <th className="px-4 py-3 font-semibold">데이터</th>
-                <th className="px-4 py-3 font-semibold">메모</th>
-              </tr>
-            </thead>
-            <tbody>
-              {apartments.map((apartment) => (
-                <ApartmentRow key={apartment.id} {...apartment} />
-              ))}
-            </tbody>
-          </table>
-        </div>
       </section>
+      <div className="mt-5">
+        <ApartmentsClient />
+      </div>
     </AppShell>
   );
 }

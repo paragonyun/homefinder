@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
 import type { ApartmentStatus } from "@/types/apartment";
 
@@ -12,6 +13,7 @@ type ApartmentRowProps = {
   areaSummary: string;
   sourceState: string;
   note: string;
+  children?: ReactNode;
 };
 
 export function ApartmentRow(props: Readonly<ApartmentRowProps>) {
@@ -34,6 +36,9 @@ export function ApartmentRow(props: Readonly<ApartmentRowProps>) {
       <td className="px-4 py-4 text-sm text-slate-700">{props.areaSummary}</td>
       <td className="px-4 py-4 text-sm text-slate-700">{props.sourceState}</td>
       <td className="px-4 py-4 text-sm leading-6 text-slate-700">{props.note}</td>
+      {props.children ? (
+        <td className="px-4 py-4 text-sm text-slate-700">{props.children}</td>
+      ) : null}
     </tr>
   );
 }

@@ -1,3 +1,4 @@
+import { AuthPanel } from "@/components/auth/auth-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -14,6 +15,7 @@ export default function SettingsPage() {
         </p>
 
         <div className="mt-6 grid gap-3">
+          <AuthPanel />
           <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-semibold text-slate-950">Supabase Auth</p>
             <p className="mt-1 text-sm text-slate-600">

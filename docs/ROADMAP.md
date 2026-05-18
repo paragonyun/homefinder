@@ -18,12 +18,12 @@
 
 ## Phase 2: DB 및 기본 CRUD
 
-- Supabase migration 작성
-- RLS 정책 적용
-- neighborhoods CRUD
-- apartments CRUD
-- field_notes CRUD
-- 단지 상태 관리
+- Supabase migration 작성 완료
+- RLS 정책 작성 완료
+- neighborhoods CRUD UI 연결 완료
+- apartments CRUD UI 연결 완료
+- field_notes CRUD UI 연결 완료
+- 남은 작업: Supabase 프로젝트 생성, migration 실제 적용, Vercel 환경변수 등록
 
 ## Phase 3: 실거래가 연동
 

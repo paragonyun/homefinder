@@ -1,0 +1,226 @@
+# DB Schema
+
+Supabase PostgreSQL 기준 초안입니다. 첫 커밋에서는 migration을 적용하지 않고 문서로 설계를 고정합니다.
+
+## 공통 원칙
+
+- 모든 사용자 소유 데이터는 `user_id`를 둡니다.
+- 주요 외부 데이터에는 `source_name`, `source_ref`, `fetched_at`, `confidence_level`을 둡니다.
+- 원천 응답은 `raw_api_responses`에 저장하고, 화면용 데이터는 별도 테이블에 저장합니다.
+- 가격/실거래가 자체를 수동으로 덮어쓰는 기능은 MVP에서 만들지 않습니다.
+
+## Enums
+
+```sql
+create type apartment_status as enum (
+  'candidate',
+  'interested',
+  'visit_planned',
+  'visited',
+  'on_hold',
+  'excluded'
+);
+
+create type confidence_level as enum (
+  'high',
+  'medium',
+  'low',
+  'manual',
+  'unknown'
+);
+```
+
+## Core Tables
+
+### users
+
+Supabase Auth 사용자 보조 프로필입니다.
+
+- `id uuid primary key`
+- `email text unique`
+- `name text`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+### neighborhoods
+
+- `id uuid primary key`
+- `user_id uuid references users(id)`
+- `name text not null`
+- `description text`
+- `city text`
+- `district text`
+- `dong text`
+- `center_lat numeric`
+- `center_lng numeric`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+### apartments
+
+- `id uuid primary key`
+- `user_id uuid references users(id)`
+- `neighborhood_id uuid references neighborhoods(id)`
+- `name text not null`
+- `display_name text`
+- `address text`
+- `road_address text`
+- `lat numeric`
+- `lng numeric`
+- `lawd_cd text`
+- `kapt_code text`
+- `kb_url text`
+- `naver_land_url text`
+- `status apartment_status`
+- `memo text`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+수동 보정 가능 필드는 주소, 법정동코드, K-apt 코드, 좌표, 단지 alias, KB/네이버 참고 링크입니다.
+
+### apartment_aliases
+
+- `id uuid primary key`
+- `apartment_id uuid references apartments(id)`
+- `alias text not null`
+- `source text`
+- `created_at timestamptz`
+
+## External Data Tables
+
+### raw_api_responses
+
+- `id uuid primary key`
+- `provider text not null`
+- `endpoint text`
+- `request_hash text`
+- `request_params jsonb`
+- `response_body jsonb`
+- `fetched_at timestamptz`
+- `apartment_id uuid references apartments(id)`
+- `created_at timestamptz`
+
+### apartment_transactions
+
+- `id uuid primary key`
+- `apartment_id uuid references apartments(id)`
+- `deal_year integer`
+- `deal_month integer`
+- `deal_day integer`
+- `deal_date date`
+- `exclusive_area_m2 numeric`
+- `floor integer`
+- `deal_amount_krw bigint`
+- `deal_amount_manwon integer`
+- `apartment_name_from_source text`
+- `address_from_source text`
+- `cancel_yn text`
+- `cancel_date date`
+- `source_name text`
+- `source_ref text`
+- `fetched_at timestamptz`
+- `confidence_level confidence_level`
+- `created_at timestamptz`
+
+인덱스 후보: `apartment_id`, `deal_date`, `exclusive_area_m2`, `deal_amount_krw`.
+
+### apartment_price_snapshots
+
+- `id uuid primary key`
+- `apartment_id uuid references apartments(id)`
+- `area_bucket text`
+- `exclusive_area_min_m2 numeric`
+- `exclusive_area_max_m2 numeric`
+- `snapshot_date date`
+- `avg_price_krw bigint`
+- `min_price_krw bigint`
+- `max_price_krw bigint`
+- `median_price_krw bigint`
+- `transaction_count integer`
+- `source_name text`
+- `source_ref text`
+- `fetched_at timestamptz`
+- `confidence_level confidence_level`
+- `calculated_at timestamptz`
+
+### apartment_basic_info
+
+- `id uuid primary key`
+- `apartment_id uuid references apartments(id)`
+- `household_count integer`
+- `building_count integer`
+- `approval_date date`
+- `heating_type text`
+- `management_type text`
+- `sale_type text`
+- `parking_count integer`
+- `elevator_count integer`
+- `source_name text`
+- `source_ref text`
+- `confidence_level confidence_level`
+- `fetched_at timestamptz`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+### apartment_building_info
+
+- `id uuid primary key`
+- `apartment_id uuid references apartments(id)`
+- `land_area_m2 numeric`
+- `building_area_m2 numeric`
+- `gross_floor_area_m2 numeric`
+- `floor_area_ratio numeric`
+- `building_coverage_ratio numeric`
+- `main_use text`
+- `highest_floor integer`
+- `lowest_floor integer`
+- `structure_type text`
+- `source_name text`
+- `source_ref text`
+- `confidence_level confidence_level`
+- `fetched_at timestamptz`
+- `created_at timestamptz`
+- `updated_at timestamptz`
+
+## School / Commute / Notes
+
+### schools
+
+학교 기본정보와 좌표를 저장합니다.
+
+- `source_name text`
+- `source_ref text`
+- `fetched_at timestamptz`
+- `confidence_level confidence_level`
+
+### apartment_school_access
+
+단지와 학교 간 거리, 도보 추정 시간, 가까운 학교 여부를 저장합니다.
+
+### destinations
+
+기본 목적지는 여의도역과 강남역입니다. 사용자가 회사, 부모님 집, 서울역 같은 목적지를 추가할 수 있습니다.
+
+### commute_times
+
+목적지별 대중교통 소요시간, 도보 시간, 환승 횟수, 기준 시각, 출처를 저장합니다.
+
+- `source_name text`
+- `source_ref text`
+- `query_datetime timestamptz`
+- `fetched_at timestamptz`
+- `confidence_level confidence_level`
+
+### field_notes / field_note_photos
+
+임장 방문일, 날씨, 체감 거리, 언덕, 주차, 소음, 상권, 장단점, 총평, 사진을 저장합니다. 공식 데이터와 섞지 않습니다.
+
+### decision_reviews
+
+MVP 3의 점수화와 판단 메모를 위한 테이블입니다. 첫 단계에서는 구조만 문서화합니다.
+
+## RLS 방향
+
+- 모든 사용자 데이터는 `user_id = auth.uid()` 조건으로 접근합니다.
+- 공유 기능은 MVP 이후 별도 정책으로 검토합니다.
+- `SUPABASE_SERVICE_ROLE_KEY`는 서버와 batch에서만 사용합니다.

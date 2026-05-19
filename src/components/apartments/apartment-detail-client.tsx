@@ -39,7 +39,6 @@ export function ApartmentDetailClient({
   const [session, setSession] = useState<Session | null>(null);
   const [apartment, setApartment] = useState<ApartmentRowData | null>(null);
   const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
-  const [syncMonth, setSyncMonth] = useState(getCurrentDealYmd());
   const [isSyncing, setIsSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
@@ -151,7 +150,7 @@ export function ApartmentDetailClient({
           "content-type": "application/json",
           authorization: `Bearer ${currentSession?.access_token ?? ""}`,
         },
-        body: JSON.stringify({ dealYmd: syncMonth }),
+        body: JSON.stringify({}),
       },
     );
     const result = (await response.json()) as {
@@ -159,14 +158,20 @@ export function ApartmentDetailClient({
       matchedCount?: number;
       totalCount?: number;
       dealYmd?: string;
+      monthsChecked?: number;
     };
 
     if (!response.ok) {
       setMessage(result.error ?? "실거래가 동기화에 실패했습니다.");
     } else {
       await loadApartment();
+      const monthsChecked = result.monthsChecked ?? 0;
+      const matchedCount = result.matchedCount ?? 0;
+
       setMessage(
-        `${result.dealYmd} 실거래가 ${result.matchedCount ?? 0}건을 반영했습니다. 전체 조회 ${result.totalCount ?? 0}건 중 단지명 일치 거래만 저장했습니다.`,
+        matchedCount > 0 && result.dealYmd
+          ? `최근 ${monthsChecked}개월을 확인했고, ${result.dealYmd} 실거래가 ${matchedCount}건을 반영했습니다.`
+          : `최근 ${monthsChecked}개월에서 단지명 일치 거래를 찾지 못했습니다.`,
       );
     }
 
@@ -216,8 +221,8 @@ export function ApartmentDetailClient({
               가격/실거래가
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              국토부 아파트 매매 실거래가 상세 자료를 법정동코드와 계약년월로
-              조회하고, 단지명이 일치한 거래만 저장합니다.
+              국토부 아파트 매매 실거래가 상세 자료를 최근월부터 과거 24개월까지
+              조회하고, 단지명이 일치한 최신 거래월만 저장합니다.
             </p>
             <p className="mt-1 text-sm text-slate-500">
               법정동코드: {apartment?.lawd_cd ?? "미입력"}
@@ -225,22 +230,13 @@ export function ApartmentDetailClient({
           </div>
           {!mockApartment && session && isAdmin ? (
             <div className="flex flex-wrap items-end gap-2">
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                계약년월
-                <input
-                  value={syncMonth}
-                  onChange={(event) => setSyncMonth(event.target.value)}
-                  className="w-32 rounded-md border border-slate-300 px-3 py-2"
-                  placeholder="202501"
-                />
-              </label>
               <button
                 type="button"
                 onClick={() => void handleTransactionSync()}
                 disabled={isSyncing || !apartment?.lawd_cd}
                 className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
               >
-                {isSyncing ? "동기화 중" : "실거래가 동기화"}
+                {isSyncing ? "조회 중" : "최근 실거래가 불러오기"}
               </button>
             </div>
           ) : null}
@@ -295,8 +291,8 @@ export function ApartmentDetailClient({
           </div>
         ) : (
           <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-            아직 저장된 실거래가가 없습니다. 운영자 계정에서 법정동코드와 계약년월을
-            확인한 뒤 동기화하세요.
+            아직 저장된 실거래가가 없습니다. 운영자 계정에서 법정동코드를 확인한 뒤
+            최근 실거래가를 불러오세요.
           </p>
         )}
       </section>
@@ -323,9 +319,4 @@ export function ApartmentDetailClient({
       </Link>
     </div>
   );
-}
-
-function getCurrentDealYmd() {
-  const now = new Date();
-  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
 }

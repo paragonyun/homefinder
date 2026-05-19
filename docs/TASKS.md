@@ -45,6 +45,7 @@
 - [x] `apartment_transactions` migration 작성
 - [x] 실거래가 동기화 route 작성
 - [x] 단지 상세 거래 테이블 표시
+- [x] 최근월 기준 자동 실거래가 동기화
 - [ ] Supabase에 거래 migration 실제 적용
 - [ ] Vercel에 `MOLIT_API_KEY` 등록
 - [ ] 실제 국토부 API 응답으로 운영 환경 동기화 검증

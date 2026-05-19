@@ -22,6 +22,7 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 - 법정동코드는 단지 수정 화면에서 수동 보정합니다.
 - API 키는 `MOLIT_API_KEY`로 서버 route에서만 읽습니다.
 - 원천 XML은 `raw_api_responses`에 저장하고, 정규화 거래는 `apartment_transactions`에 저장합니다.
+- 화면의 기본 동기화는 계약년월 입력을 요구하지 않습니다. 서버가 최근월부터 과거 24개월까지 순차 조회하고, 단지명 일치 거래가 처음 발견된 최신 거래월에서 멈춥니다.
 - 단지명은 공백 제거 후 정확히 일치하는 거래만 저장합니다. 표기 차이가 있으면 alias/matching 개선을 후속 작업으로 처리합니다.
 - 같은 계약월 동기화를 반복해도 `apartment_id + source_name + source_hash` unique key로 중복 저장을 막습니다.
 

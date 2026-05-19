@@ -42,11 +42,77 @@ export type MolitApartmentTradePage = MolitApartmentTradeParseResult & {
   rawXml: string;
 };
 
+export type ResolveMolitDealYmdsResult =
+  | {
+      ok: true;
+      mode: "manual" | "recent";
+      dealYmds: string[];
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 const parser = new XMLParser({
   ignoreAttributes: false,
   parseTagValue: false,
   trimValues: true,
 });
+
+const DEFAULT_RECENT_MONTH_COUNT = 24;
+const MAX_RECENT_MONTH_COUNT = 36;
+
+export function resolveMolitDealYmds({
+  dealYmd,
+  months,
+  now = new Date(),
+}: {
+  dealYmd?: unknown;
+  months?: unknown;
+  now?: Date;
+}): ResolveMolitDealYmdsResult {
+  if (typeof dealYmd === "string" && dealYmd.trim().length > 0) {
+    const trimmed = dealYmd.trim();
+
+    if (!/^\d{6}$/.test(trimmed)) {
+      return { ok: false, error: "계약년월은 YYYYMM 형식으로 입력하세요." };
+    }
+
+    return { ok: true, mode: "manual", dealYmds: [trimmed] };
+  }
+
+  const monthCount =
+    typeof months === "number" && Number.isInteger(months)
+      ? Math.min(Math.max(months, 1), MAX_RECENT_MONTH_COUNT)
+      : DEFAULT_RECENT_MONTH_COUNT;
+
+  return {
+    ok: true,
+    mode: "recent",
+    dealYmds: getRecentDealYmds({ from: now, months: monthCount }),
+  };
+}
+
+export function getRecentDealYmds({
+  from,
+  months,
+}: {
+  from: Date;
+  months: number;
+}) {
+  const result: string[] = [];
+  const startYear = from.getUTCFullYear();
+  const startMonthIndex = from.getUTCMonth();
+
+  for (let index = 0; index < months; index += 1) {
+    const date = new Date(Date.UTC(startYear, startMonthIndex - index, 1));
+    result.push(
+      `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}`,
+    );
+  }
+
+  return result;
+}
 
 export function parseMolitApartmentTradeXml(
   xml: string,

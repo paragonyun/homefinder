@@ -5,7 +5,9 @@ import {
   fetchMolitApartmentTradePages,
   MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT,
   normalizeApartmentNameForMolit,
+  resolveMolitDealYmds,
   type MolitApartmentTrade,
+  type MolitApartmentTradePage,
 } from "@/lib/data-providers/molit-transactions";
 import {
   createSupabaseRouteClient,
@@ -65,13 +67,13 @@ export async function POST(
 
   const { id: apartmentId } = await context.params;
   const body = await readJsonBody(request);
-  const dealYmd = normalizeDealYmd(body.dealYmd);
+  const dealYmds = resolveMolitDealYmds({
+    dealYmd: body.dealYmd,
+    months: body.months,
+  });
 
-  if (!dealYmd) {
-    return NextResponse.json(
-      { error: "계약년월은 YYYYMM 형식으로 입력하세요." },
-      { status: 400 },
-    );
+  if (!dealYmds.ok) {
+    return NextResponse.json({ error: dealYmds.error }, { status: 400 });
   }
 
   const { data: apartment, error: apartmentError } = await supabase
@@ -102,14 +104,43 @@ export async function POST(
     );
   }
 
-  let pages;
+  const sourceNames = [
+    normalizeApartmentNameForMolit(apartment.name),
+    normalizeApartmentNameForMolit(apartment.display_name),
+  ].filter(Boolean);
+  const attempts: Array<{
+    dealYmd: string;
+    totalCount: number;
+    matchedCount: number;
+    pageCount: number;
+  }> = [];
+  let selectedDealYmd: string | null = null;
+  let selectedPages: MolitApartmentTradePage[] = [];
+  let transactions: MolitApartmentTrade[] = [];
 
   try {
-    pages = await fetchMolitApartmentTradePages({
-      serviceKey: process.env.MOLIT_API_KEY,
-      lawdCd: apartment.lawd_cd,
-      dealYmd,
-    });
+    for (const dealYmd of dealYmds.dealYmds) {
+      const pages = await fetchMolitApartmentTradePages({
+        serviceKey: process.env.MOLIT_API_KEY,
+        lawdCd: apartment.lawd_cd,
+        dealYmd,
+      });
+      const matchedTransactions = getMatchingTransactions(pages, sourceNames);
+
+      attempts.push({
+        dealYmd,
+        totalCount: pages[0]?.totalCount ?? 0,
+        matchedCount: matchedTransactions.length,
+        pageCount: pages.length,
+      });
+
+      if (matchedTransactions.length > 0 || dealYmds.mode === "manual") {
+        selectedDealYmd = dealYmd;
+        selectedPages = pages;
+        transactions = matchedTransactions;
+        break;
+      }
+    }
   } catch (error) {
     return NextResponse.json(
       {
@@ -122,18 +153,6 @@ export async function POST(
     );
   }
 
-  const sourceNames = [
-    normalizeApartmentNameForMolit(apartment.name),
-    normalizeApartmentNameForMolit(apartment.display_name),
-  ].filter(Boolean);
-  const transactions = pages
-    .flatMap((page) => page.transactions)
-    .filter((transaction) =>
-      sourceNames.includes(
-        normalizeApartmentNameForMolit(transaction.apartmentNameFromSource),
-      ),
-    );
-
   const { data: rawResponse, error: rawError } = await supabase
     .from("raw_api_responses")
     .insert({
@@ -143,21 +162,26 @@ export async function POST(
         JSON.stringify({
           apartmentId,
           lawdCd: apartment.lawd_cd,
-          dealYmd,
+          mode: dealYmds.mode,
+          dealYmds: dealYmds.dealYmds,
           sourceNames,
         }),
       ),
       request_params: {
         apartmentId,
         lawdCd: apartment.lawd_cd,
-        dealYmd,
+        mode: dealYmds.mode,
+        dealYmds: dealYmds.dealYmds,
         sourceNames,
-        pages: pages.map((page) => page.pageNo),
+        attempts,
       },
       response_body: {
-        totalCount: pages[0]?.totalCount ?? 0,
+        totalCount: attempts.reduce((sum, attempt) => sum + attempt.totalCount, 0),
         matchedCount: transactions.length,
-        pages: pages.map((page) => ({
+        matchedDealYmd: selectedDealYmd,
+        attempts,
+        pages: selectedPages.map((page) => ({
+          dealYmd: selectedDealYmd,
           pageNo: page.pageNo,
           rawXml: page.rawXml,
         })),
@@ -193,9 +217,24 @@ export async function POST(
 
   return NextResponse.json({
     matchedCount: transactions.length,
-    totalCount: pages[0]?.totalCount ?? 0,
-    dealYmd,
+    totalCount: attempts.reduce((sum, attempt) => sum + attempt.totalCount, 0),
+    dealYmd: selectedDealYmd,
+    monthsChecked: attempts.length,
+    mode: dealYmds.mode,
   });
+}
+
+function getMatchingTransactions(
+  pages: MolitApartmentTradePage[],
+  sourceNames: string[],
+) {
+  return pages
+    .flatMap((page) => page.transactions)
+    .filter((transaction) =>
+      sourceNames.includes(
+        normalizeApartmentNameForMolit(transaction.apartmentNameFromSource),
+      ),
+    );
 }
 
 function toTransactionPayload(
@@ -261,17 +300,8 @@ function getBearerToken(request: Request) {
 
 async function readJsonBody(request: Request) {
   try {
-    return (await request.json()) as { dealYmd?: unknown };
+    return (await request.json()) as { dealYmd?: unknown; months?: unknown };
   } catch {
     return {};
   }
-}
-
-function normalizeDealYmd(value: unknown) {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return /^\d{6}$/.test(trimmed) ? trimmed : null;
 }

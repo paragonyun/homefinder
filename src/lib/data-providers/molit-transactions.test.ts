@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseMolitApartmentTradeXml } from "./molit-transactions";
+import {
+  getRecentDealYmds,
+  parseMolitApartmentTradeXml,
+  resolveMolitDealYmds,
+} from "./molit-transactions";
 
 describe("parseMolitApartmentTradeXml", () => {
   it("normalizes apartment trade XML into typed transaction rows", () => {
@@ -89,5 +93,60 @@ describe("parseMolitApartmentTradeXml", () => {
         "<OpenAPI_ServiceResponse><cmmMsgHeader><returnReasonCode>30</returnReasonCode><returnAuthMsg>SERVICE KEY IS NOT REGISTERED ERROR.</returnAuthMsg></cmmMsgHeader></OpenAPI_ServiceResponse>",
       ),
     ).toThrow("MOLIT API error 30: SERVICE KEY IS NOT REGISTERED ERROR.");
+  });
+});
+
+describe("getRecentDealYmds", () => {
+  it("returns recent contract months in descending order", () => {
+    expect(
+      getRecentDealYmds({
+        from: new Date("2026-05-19T00:00:00Z"),
+        months: 4,
+      }),
+    ).toEqual(["202605", "202604", "202603", "202602"]);
+  });
+
+  it("handles year boundaries", () => {
+    expect(
+      getRecentDealYmds({
+        from: new Date("2026-01-15T00:00:00Z"),
+        months: 3,
+      }),
+    ).toEqual(["202601", "202512", "202511"]);
+  });
+});
+
+describe("resolveMolitDealYmds", () => {
+  it("uses a manual contract month when one is provided", () => {
+    expect(
+      resolveMolitDealYmds({
+        dealYmd: " 202501 ",
+        now: new Date("2026-05-19T00:00:00Z"),
+      }),
+    ).toEqual({
+      ok: true,
+      mode: "manual",
+      dealYmds: ["202501"],
+    });
+  });
+
+  it("defaults to recent months when no manual month is provided", () => {
+    expect(
+      resolveMolitDealYmds({
+        now: new Date("2026-05-19T00:00:00Z"),
+        months: 2,
+      }),
+    ).toEqual({
+      ok: true,
+      mode: "recent",
+      dealYmds: ["202605", "202604"],
+    });
+  });
+
+  it("rejects invalid manual contract months", () => {
+    expect(resolveMolitDealYmds({ dealYmd: "2025-01" })).toEqual({
+      ok: false,
+      error: "계약년월은 YYYYMM 형식으로 입력하세요.",
+    });
   });
 });

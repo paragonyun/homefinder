@@ -70,6 +70,10 @@ Vercel에는 최소한 아래 환경변수를 추가해야 실제 로그인과 C
 
 `SUPABASE_SERVICE_ROLE_KEY`는 후속 서버 배치나 외부 API 동기화에서만 사용합니다.
 
+국토부 실거래가 동기화에는 `MOLIT_API_KEY`가 필요합니다. 공공데이터포털에서
+`국토교통부_아파트 매매 실거래가 상세 자료` 활용신청 후 발급받은 Decoding 키를
+Vercel 환경변수에 추가하고 다시 배포합니다.
+
 ## 운영자 계정 설정
 
 개인용 운영은 Supabase Dashboard에서 미리 만든 계정만 로그인하도록 둡니다.
@@ -115,5 +119,5 @@ where email = 'you@example.com';
 
 ## 현재 상태
 
-현재 앱은 Supabase Auth와 기본 CRUD scaffold가 연결되어 있습니다. 외부 API 호출,
-실거래가 동기화, K-apt 연동, 지도/교통 연동은 아직 포함하지 않습니다.
+현재 앱은 Supabase Auth, 운영자 제한 CRUD, 국토부 실거래가 동기화 기반이
+연결되어 있습니다. K-apt 연동, 지도/교통 연동은 아직 포함하지 않습니다.

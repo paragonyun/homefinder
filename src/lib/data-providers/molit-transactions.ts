@@ -272,7 +272,17 @@ function throwMolitHttpError(status: number, body: string): never {
     }
   }
 
-  throw new Error(`MOLIT API request failed with ${status}`);
+  const preview = getBodyPreview(body);
+  throw new Error(
+    preview
+      ? `MOLIT API request failed with ${status}: ${preview}`
+      : `MOLIT API request failed with ${status}`,
+  );
+}
+
+function getBodyPreview(body: string) {
+  const preview = body.replace(/\s+/g, " ").trim();
+  return preview.length > 160 ? `${preview.slice(0, 160)}...` : preview;
 }
 
 export function normalizeApartmentNameForMolit(value: string | null | undefined) {

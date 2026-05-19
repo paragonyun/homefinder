@@ -205,4 +205,22 @@ describe("fetchMolitApartmentTradeXml", () => {
       }),
     ).rejects.toThrow("MOLIT API error 20: SERVICE_ACCESS_DENIED_ERROR.");
   });
+
+  it("includes a short body preview when non-2xx response is not a MOLIT XML error", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("Unauthorized service key", { status: 401 }),
+    );
+
+    await expect(
+      fetchMolitApartmentTradeXml({
+        serviceKey: "abc",
+        lawdCd: "11560",
+        dealYmd: "202501",
+        pageNo: 1,
+        numOfRows: 1000,
+      }),
+    ).rejects.toThrow(
+      "MOLIT API request failed with 401: Unauthorized service key",
+    );
+  });
 });

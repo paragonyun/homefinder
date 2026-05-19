@@ -74,6 +74,10 @@ Vercel에는 최소한 아래 환경변수를 추가해야 실제 로그인과 C
 `국토교통부_아파트 매매 실거래가 상세 자료` 활용신청 후 발급받은 Decoding 키를
 Vercel 환경변수에 추가하고 다시 배포합니다.
 
+`MOLIT API request failed with 403` 또는 `SERVICE_ACCESS_DENIED_ERROR`가 나오면
+Vercel redeploy 여부, `MOLIT_API_KEY` 값, 그리고 상세 자료 API 활용신청 승인 상태를
+확인합니다.
+
 ## 운영자 계정 설정
 
 개인용 운영은 Supabase Dashboard에서 미리 만든 계정만 로그인하도록 둡니다.

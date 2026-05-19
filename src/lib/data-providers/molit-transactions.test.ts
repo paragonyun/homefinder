@@ -1,9 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  buildMolitApartmentTradeUrl,
+  fetchMolitApartmentTradeXml,
   getRecentDealYmds,
   parseMolitApartmentTradeXml,
   resolveMolitDealYmds,
 } from "./molit-transactions";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("parseMolitApartmentTradeXml", () => {
   it("normalizes apartment trade XML into typed transaction rows", () => {
@@ -148,5 +154,55 @@ describe("resolveMolitDealYmds", () => {
       ok: false,
       error: "계약년월은 YYYYMM 형식으로 입력하세요.",
     });
+  });
+});
+
+describe("buildMolitApartmentTradeUrl", () => {
+  it("encodes a decoded service key exactly once", () => {
+    const url = buildMolitApartmentTradeUrl({
+      serviceKey: "abc+/=",
+      lawdCd: "11560",
+      dealYmd: "202501",
+      pageNo: 1,
+      numOfRows: 1000,
+    });
+
+    expect(url).toContain("serviceKey=abc%2B%2F%3D");
+    expect(url).toContain("LAWD_CD=11560");
+    expect(url).toContain("DEAL_YMD=202501");
+  });
+
+  it("does not double encode an already encoded service key", () => {
+    const url = buildMolitApartmentTradeUrl({
+      serviceKey: "abc%2B%2F%3D",
+      lawdCd: "11560",
+      dealYmd: "202501",
+      pageNo: 1,
+      numOfRows: 1000,
+    });
+
+    expect(url).toContain("serviceKey=abc%2B%2F%3D");
+    expect(url).not.toContain("%252B");
+  });
+});
+
+describe("fetchMolitApartmentTradeXml", () => {
+  it("surfaces MOLIT error bodies from non-2xx responses", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        "<OpenAPI_ServiceResponse><cmmMsgHeader><returnReasonCode>20</returnReasonCode><returnAuthMsg>SERVICE_ACCESS_DENIED_ERROR.</returnAuthMsg></cmmMsgHeader></OpenAPI_ServiceResponse>",
+        { status: 403 },
+      ),
+    );
+
+    await expect(
+      fetchMolitApartmentTradeXml({
+        serviceKey: "abc",
+        lawdCd: "11560",
+        dealYmd: "202501",
+        pageNo: 1,
+        numOfRows: 1000,
+      }),
+    ).rejects.toThrow("MOLIT API error 20: SERVICE_ACCESS_DENIED_ERROR.");
   });
 });

@@ -221,20 +221,58 @@ export async function fetchMolitApartmentTradeXml({
   pageNo,
   numOfRows,
 }: FetchMolitApartmentTradesParams & { pageNo: number; numOfRows: number }) {
-  const url = new URL(MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT);
-  url.searchParams.set("serviceKey", serviceKey);
-  url.searchParams.set("LAWD_CD", lawdCd);
-  url.searchParams.set("DEAL_YMD", dealYmd);
-  url.searchParams.set("pageNo", String(pageNo));
-  url.searchParams.set("numOfRows", String(numOfRows));
-
-  const response = await fetch(url);
+  const response = await fetch(
+    buildMolitApartmentTradeUrl({
+      serviceKey,
+      lawdCd,
+      dealYmd,
+      pageNo,
+      numOfRows,
+    }),
+  );
 
   if (!response.ok) {
-    throw new Error(`MOLIT API request failed with ${response.status}`);
+    throwMolitHttpError(response.status, await response.text());
   }
 
   return response.text();
+}
+
+export function buildMolitApartmentTradeUrl({
+  serviceKey,
+  lawdCd,
+  dealYmd,
+  pageNo,
+  numOfRows,
+}: FetchMolitApartmentTradesParams & { pageNo: number; numOfRows: number }) {
+  const params = new URLSearchParams({
+    LAWD_CD: lawdCd,
+    DEAL_YMD: dealYmd,
+    pageNo: String(pageNo),
+    numOfRows: String(numOfRows),
+  });
+  const trimmedServiceKey = serviceKey.trim();
+  const serviceKeyParam = looksUrlEncoded(trimmedServiceKey)
+    ? trimmedServiceKey
+    : encodeURIComponent(trimmedServiceKey);
+
+  return `${MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT}?serviceKey=${serviceKeyParam}&${params.toString()}`;
+}
+
+function looksUrlEncoded(value: string) {
+  return /%[0-9a-f]{2}/i.test(value);
+}
+
+function throwMolitHttpError(status: number, body: string): never {
+  try {
+    parseMolitApartmentTradeXml(body);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("MOLIT API error")) {
+      throw error;
+    }
+  }
+
+  throw new Error(`MOLIT API request failed with ${status}`);
 }
 
 export function normalizeApartmentNameForMolit(value: string | null | undefined) {

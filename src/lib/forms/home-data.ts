@@ -28,6 +28,24 @@ function cleanRequiredText(value: unknown) {
   return cleanText(value);
 }
 
+function normalizeLawdCd(value: unknown) {
+  const text = cleanText(value);
+
+  if (!text) {
+    return null;
+  }
+
+  if (/^\d{5}$/.test(text)) {
+    return text;
+  }
+
+  if (/^\d{10}$/.test(text)) {
+    return text.slice(0, 5);
+  }
+
+  return undefined;
+}
+
 function cleanRating(value: unknown): ValidationResult<number | null> {
   const text = cleanText(value);
 
@@ -120,10 +138,10 @@ export function validateApartmentInput(
     return { ok: false, error: "알 수 없는 단지 상태입니다." };
   }
 
-  const lawdCd = cleanText(input.lawdCd);
+  const lawdCd = normalizeLawdCd(input.lawdCd);
 
-  if (lawdCd && !/^\d{5}$/.test(lawdCd)) {
-    return { ok: false, error: "법정동코드는 5자리 숫자로 입력하세요." };
+  if (lawdCd === undefined) {
+    return { ok: false, error: "법정동코드는 5자리 또는 10자리 숫자로 입력하세요." };
   }
 
   return {

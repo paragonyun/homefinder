@@ -73,7 +73,7 @@ describe("validateApartmentInput", () => {
     });
   });
 
-  it("requires lawd_cd to be five digits when present", () => {
+  it("requires lawd_cd to be five or ten digits when present", () => {
     expect(
       validateApartmentInput({
         name: "래미안에스티움",
@@ -82,7 +82,22 @@ describe("validateApartmentInput", () => {
       }),
     ).toEqual({
       ok: false,
-      error: "법정동코드는 5자리 숫자로 입력하세요.",
+      error: "법정동코드는 5자리 또는 10자리 숫자로 입력하세요.",
+    });
+  });
+
+  it("accepts a ten digit legal dong code and stores the district prefix", () => {
+    expect(
+      validateApartmentInput({
+        name: "래미안에스티움",
+        status: "candidate",
+        lawdCd: "1156013200",
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        lawd_cd: "11560",
+      },
     });
   });
 });

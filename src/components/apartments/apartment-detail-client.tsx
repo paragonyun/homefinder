@@ -228,16 +228,26 @@ export function ApartmentDetailClient({
               법정동코드: {apartment?.lawd_cd ?? "미입력"}
             </p>
           </div>
-          {!mockApartment && session && isAdmin ? (
-            <div className="flex flex-wrap items-end gap-2">
+          {!mockApartment && session ? (
+            <div className="grid gap-2">
               <button
                 type="button"
                 onClick={() => void handleTransactionSync()}
-                disabled={isSyncing || !apartment?.lawd_cd}
+                disabled={isSyncing || !apartment?.lawd_cd || !isAdmin}
                 className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
               >
                 {isSyncing ? "조회 중" : "최근 실거래가 불러오기"}
               </button>
+              {!isAdmin ? (
+                <p className="max-w-64 text-xs leading-5 text-slate-500">
+                  실거래가 동기화는 운영자 계정에서만 실행할 수 있습니다.
+                </p>
+              ) : !apartment?.lawd_cd ? (
+                <p className="max-w-64 text-xs leading-5 text-slate-500">
+                  단지 수정에서 법정동코드를 입력하면 버튼이 활성화됩니다. 10자리
+                  법정동코드는 앞 5자리로 저장됩니다.
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>

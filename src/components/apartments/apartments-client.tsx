@@ -300,9 +300,14 @@ export function ApartmentsClient() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, lawdCd: event.target.value }))
                 }
+                inputMode="numeric"
                 className="rounded-md border border-slate-300 px-3 py-2"
-                placeholder="예: 11560"
+                placeholder="예: 11560 또는 1156013200"
               />
+              <span className="text-xs leading-5 text-slate-500">
+                국토부 API에는 앞 5자리 시군구 코드가 필요합니다. 10자리 법정동코드를
+                붙여넣으면 앞 5자리만 저장합니다.
+              </span>
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">
               KB부동산 참고 링크

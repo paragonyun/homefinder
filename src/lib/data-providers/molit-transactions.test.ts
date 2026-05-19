@@ -3,6 +3,7 @@ import {
   buildMolitApartmentTradeUrl,
   fetchMolitApartmentTradeXml,
   getRecentDealYmds,
+  isMolitApartmentNameMatch,
   parseMolitApartmentTradeXml,
   resolveMolitDealYmds,
 } from "./molit-transactions";
@@ -184,6 +185,24 @@ describe("buildMolitApartmentTradeUrl", () => {
 
     expect(url).toContain("serviceKey=abc%2B%2F%3D");
     expect(url).not.toContain("%252B");
+  });
+});
+
+describe("isMolitApartmentNameMatch", () => {
+  it("matches official short names against user-entered long names", () => {
+    expect(
+      isMolitApartmentNameMatch("동아3차", ["염창동 동아 3차 아파트"]),
+    ).toBe(true);
+
+    expect(
+      isMolitApartmentNameMatch("관악드림타운", ["봉천동 관악드림타운"]),
+    ).toBe(true);
+  });
+
+  it("keeps very short names from matching broad text accidentally", () => {
+    expect(isMolitApartmentNameMatch("동아", ["염창동 동아 3차 아파트"])).toBe(
+      false,
+    );
   });
 });
 

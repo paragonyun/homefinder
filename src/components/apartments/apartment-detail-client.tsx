@@ -245,7 +245,7 @@ export function ApartmentDetailClient({
               ) : !apartment?.lawd_cd ? (
                 <p className="max-w-64 text-xs leading-5 text-slate-500">
                   단지 수정에서 법정동코드를 입력하면 버튼이 활성화됩니다. 10자리
-                  법정동코드는 앞 5자리로 저장됩니다.
+                  법정동코드는 그대로 저장하고, 국토부 조회에는 앞 5자리만 사용합니다.
                 </p>
               ) : null}
             </div>

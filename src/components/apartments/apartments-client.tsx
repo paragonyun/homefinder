@@ -305,8 +305,8 @@ export function ApartmentsClient() {
                 placeholder="예: 11560 또는 1156013200"
               />
               <span className="text-xs leading-5 text-slate-500">
-                국토부 API에는 앞 5자리 시군구 코드가 필요합니다. 10자리 법정동코드를
-                붙여넣으면 앞 5자리만 저장합니다.
+                5자리 시군구 코드 또는 10자리 법정동코드를 입력할 수 있습니다.
+                국토부 조회에는 앞 5자리만 사용합니다.
               </span>
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">

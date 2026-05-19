@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
   fetchMolitApartmentTradePages,
+  isMolitApartmentNameMatch,
   MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT,
   normalizeApartmentNameForMolit,
   resolveMolitDealYmds,
@@ -97,13 +98,16 @@ export async function POST(
     );
   }
 
-  if (!/^\d{5}$/.test(apartment.lawd_cd)) {
+  if (!/^\d{5}(\d{5})?$/.test(apartment.lawd_cd)) {
     return NextResponse.json(
       { error: "법정동코드는 5자리 숫자여야 합니다." },
       { status: 400 },
     );
   }
 
+  const molitLawdCd = apartment.lawd_cd.slice(0, 5);
+  const legalDongCd =
+    apartment.lawd_cd.length === 10 ? apartment.lawd_cd.slice(5) : null;
   const sourceNames = [
     normalizeApartmentNameForMolit(apartment.name),
     normalizeApartmentNameForMolit(apartment.display_name),
@@ -122,10 +126,14 @@ export async function POST(
     for (const dealYmd of dealYmds.dealYmds) {
       const pages = await fetchMolitApartmentTradePages({
         serviceKey: process.env.MOLIT_API_KEY,
-        lawdCd: apartment.lawd_cd,
+        lawdCd: molitLawdCd,
         dealYmd,
       });
-      const matchedTransactions = getMatchingTransactions(pages, sourceNames);
+      const matchedTransactions = getMatchingTransactions(
+        pages,
+        sourceNames,
+        legalDongCd,
+      );
 
       attempts.push({
         dealYmd,
@@ -162,6 +170,8 @@ export async function POST(
         JSON.stringify({
           apartmentId,
           lawdCd: apartment.lawd_cd,
+          molitLawdCd,
+          legalDongCd,
           mode: dealYmds.mode,
           dealYmds: dealYmds.dealYmds,
           sourceNames,
@@ -170,6 +180,8 @@ export async function POST(
       request_params: {
         apartmentId,
         lawdCd: apartment.lawd_cd,
+        molitLawdCd,
+        legalDongCd,
         mode: dealYmds.mode,
         dealYmds: dealYmds.dealYmds,
         sourceNames,
@@ -227,14 +239,21 @@ export async function POST(
 function getMatchingTransactions(
   pages: MolitApartmentTradePage[],
   sourceNames: string[],
+  legalDongCd: string | null,
 ) {
   return pages
     .flatMap((page) => page.transactions)
     .filter((transaction) =>
-      sourceNames.includes(
-        normalizeApartmentNameForMolit(transaction.apartmentNameFromSource),
-      ),
+      matchesLegalDong(transaction, legalDongCd) &&
+      isMolitApartmentNameMatch(transaction.apartmentNameFromSource, sourceNames),
     );
+}
+
+function matchesLegalDong(
+  transaction: MolitApartmentTrade,
+  legalDongCd: string | null,
+) {
+  return !legalDongCd || !transaction.umdCd || transaction.umdCd === legalDongCd;
 }
 
 function toTransactionPayload(

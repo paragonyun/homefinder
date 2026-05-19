@@ -20,6 +20,8 @@ export type MolitApartmentTrade = {
   cancelDate: string | null;
   aptSeq?: string | null;
   aptDong?: string | null;
+  sggCd?: string | null;
+  umdCd?: string | null;
   buildYear?: number | null;
   dealingGbn?: string | null;
   rgstDate?: string | null;
@@ -286,7 +288,44 @@ function getBodyPreview(body: string) {
 }
 
 export function normalizeApartmentNameForMolit(value: string | null | undefined) {
-  return cleanText(value)?.replace(/\s+/g, "").toLowerCase() ?? "";
+  return (
+    cleanText(value)
+      ?.replace(/\s+/g, "")
+      .replace(/[()[\]{}._\-·ㆍ]/g, "")
+      .toLowerCase() ?? ""
+  );
+}
+
+export function isMolitApartmentNameMatch(
+  sourceName: string | null | undefined,
+  targetNames: string[],
+) {
+  const source = normalizeApartmentNameForMolit(sourceName);
+
+  if (!source) {
+    return false;
+  }
+
+  return targetNames.some((targetName) => {
+    const target = normalizeApartmentNameForMolit(targetName);
+
+    if (!target) {
+      return false;
+    }
+
+    if (source === target) {
+      return true;
+    }
+
+    return (
+      (isSpecificApartmentName(source) && target.includes(source)) ||
+      (isSpecificApartmentName(target) && source.includes(target))
+    );
+  });
+}
+
+function isSpecificApartmentName(value: string) {
+  return value.length >= 4 || (value.length >= 3 && /\d/.test(value));
 }
 
 function normalizeMolitTradeRecord(record: MolitXmlRecord): MolitApartmentTrade {
@@ -315,6 +354,8 @@ function normalizeMolitTradeRecord(record: MolitXmlRecord): MolitApartmentTrade 
 
   setOptional(trade, "aptSeq", cleanText(readFirst(record, ["aptSeq"])));
   setOptional(trade, "aptDong", cleanText(readFirst(record, ["aptDong"])));
+  setOptional(trade, "sggCd", cleanText(readFirst(record, ["sggCd"])));
+  setOptional(trade, "umdCd", cleanText(readFirst(record, ["umdCd"])));
   setOptional(trade, "buildYear", parseInteger(readFirst(record, ["buildYear"])));
   setOptional(trade, "dealingGbn", cleanText(readFirst(record, ["dealingGbn"])));
   setOptional(trade, "rgstDate", parseCompactDate(readFirst(record, ["rgstDate"])));

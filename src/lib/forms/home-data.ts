@@ -40,7 +40,7 @@ function normalizeLawdCd(value: unknown) {
   }
 
   if (/^\d{10}$/.test(text)) {
-    return text.slice(0, 5);
+    return text;
   }
 
   return undefined;

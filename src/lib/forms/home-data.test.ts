@@ -86,7 +86,7 @@ describe("validateApartmentInput", () => {
     });
   });
 
-  it("accepts a ten digit legal dong code and stores the district prefix", () => {
+  it("accepts and stores a ten digit legal dong code", () => {
     expect(
       validateApartmentInput({
         name: "래미안에스티움",
@@ -96,7 +96,7 @@ describe("validateApartmentInput", () => {
     ).toMatchObject({
       ok: true,
       value: {
-        lawd_cd: "11560",
+        lawd_cd: "1156013200",
       },
     });
   });

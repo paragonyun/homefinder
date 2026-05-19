@@ -86,6 +86,7 @@ export type ApartmentInput = {
   neighborhoodId?: unknown;
   address?: unknown;
   roadAddress?: unknown;
+  lawdCd?: unknown;
   status?: unknown;
   memo?: unknown;
   kbUrl?: unknown;
@@ -97,6 +98,7 @@ export type ApartmentPayload = {
   neighborhood_id: string | null;
   address: string | null;
   road_address: string | null;
+  lawd_cd: string | null;
   status: ApartmentStatus;
   memo: string | null;
   kb_url: string | null;
@@ -118,6 +120,12 @@ export function validateApartmentInput(
     return { ok: false, error: "알 수 없는 단지 상태입니다." };
   }
 
+  const lawdCd = cleanText(input.lawdCd);
+
+  if (lawdCd && !/^\d{5}$/.test(lawdCd)) {
+    return { ok: false, error: "법정동코드는 5자리 숫자로 입력하세요." };
+  }
+
   return {
     ok: true,
     value: {
@@ -125,6 +133,7 @@ export function validateApartmentInput(
       neighborhood_id: cleanText(input.neighborhoodId),
       address: cleanText(input.address),
       road_address: cleanText(input.roadAddress),
+      lawd_cd: lawdCd,
       status: status as ApartmentStatus,
       memo: cleanText(input.memo),
       kb_url: cleanText(input.kbUrl),

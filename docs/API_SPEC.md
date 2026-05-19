@@ -1,6 +1,6 @@
 # API Spec
 
-첫 커밋에서는 API route를 구현하지 않고 계약만 문서화합니다. Supabase Auth를 쓰는 영역은 직접 구현을 최소화합니다.
+Supabase Auth를 쓰는 영역은 직접 구현을 최소화합니다. 외부 API 키가 필요한 동기화만 서버 route에서 처리합니다.
 
 ## Auth
 
@@ -43,6 +43,15 @@
 - `POST /api/apartments/:id/sync/commute`
 
 sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실패 시 실패 사유를 숨기지 않습니다.
+
+현재 구현된 실거래가 route:
+
+- `POST /api/apartments/:id/transactions/sync`
+- 인증: `Authorization: Bearer <Supabase access token>`
+- 권한: `app_metadata.role = admin`
+- 요청 body: `{ "dealYmd": "202501" }`
+- 동작: 단지의 `lawd_cd`로 국토부 상세 API를 호출하고, 단지명이 일치하는 거래만 `apartment_transactions`에 upsert합니다.
+- 실패: `MOLIT_API_KEY` 없음, 법정동코드 없음, 권한 없음, 단지명 매칭 없음을 명시적으로 반환합니다.
 
 ## Transactions
 

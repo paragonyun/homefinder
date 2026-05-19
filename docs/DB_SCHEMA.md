@@ -103,7 +103,10 @@ Supabase Auth 사용자 보조 프로필입니다.
 ### apartment_transactions
 
 - `id uuid primary key`
+- `user_id uuid references users(id)`
 - `apartment_id uuid references apartments(id)`
+- `raw_api_response_id uuid references raw_api_responses(id)`
+- `source_hash text`
 - `deal_year integer`
 - `deal_month integer`
 - `deal_day integer`
@@ -122,7 +125,8 @@ Supabase Auth 사용자 보조 프로필입니다.
 - `confidence_level confidence_level`
 - `created_at timestamptz`
 
-인덱스 후보: `apartment_id`, `deal_date`, `exclusive_area_m2`, `deal_amount_krw`.
+중복 방지 기준은 `unique(apartment_id, source_name, source_hash)`입니다. 인덱스 후보:
+`apartment_id + deal_date`, `deal_date`.
 
 ### apartment_price_snapshots
 
@@ -223,5 +227,6 @@ MVP 3의 점수화와 판단 메모를 위한 테이블입니다. 첫 단계에�
 
 - 모든 사용자 데이터는 `user_id = auth.uid()` 조건으로 접근합니다.
 - 관심 동네와 관심 단지의 생성/수정/삭제는 `auth.jwt() -> 'app_metadata' ->> 'role' = 'admin'`인 운영자 계정만 가능합니다.
+- 거래/스냅샷 같은 하위 테이블은 `user_id`뿐 아니라 참조하는 `apartment_id`도 현재 사용자 소유인지 확인합니다.
 - 공유 기능은 MVP 이후 별도 정책으로 검토합니다.
 - `SUPABASE_SERVICE_ROLE_KEY`는 서버와 batch에서만 사용합니다.

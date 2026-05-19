@@ -34,6 +34,32 @@ export type ApartmentRowData = {
   updated_at: string;
 };
 
+export type ApartmentTransactionRow = {
+  id: string;
+  user_id: string;
+  apartment_id: string;
+  raw_api_response_id: string | null;
+  source_name: string;
+  source_ref: string | null;
+  source_hash: string;
+  deal_year: number;
+  deal_month: number;
+  deal_day: number;
+  deal_date: string;
+  exclusive_area_m2: number;
+  floor: number | null;
+  deal_amount_krw: number;
+  deal_amount_manwon: number;
+  apartment_name_from_source: string | null;
+  address_from_source: string | null;
+  cancel_yn: string | null;
+  cancel_date: string | null;
+  confidence_level: "high" | "medium" | "low" | "manual" | "unknown";
+  fetched_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type FieldNoteRow = {
   id: string;
   user_id: string;

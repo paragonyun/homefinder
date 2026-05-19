@@ -1,23 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { StatusPill } from "@/components/ui/status-pill";
+import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { apartments as mockApartments } from "@/lib/mock-data";
 import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
-import type { ApartmentRowData } from "@/lib/supabase/table-types";
+import type {
+  ApartmentRowData,
+  ApartmentTransactionRow,
+} from "@/lib/supabase/table-types";
+import { formatDate } from "@/utils/date";
+import { formatKrw } from "@/utils/format-price";
 
 type ApartmentDetailClientProps = {
   apartmentId: string;
 };
 
 const sections = [
-  ["가격/실거래가", "국토부 실거래가 adapter 연결 후 평형대별 테이블과 차트를 표시합니다."],
   ["단지 기본정보", "K-apt 매칭 후 세대수, 동수, 사용승인일, 난방, 주차 정보를 표시합니다."],
   ["건축정보", "건축물대장 후보 데이터가 확보되면 용적률, 건폐율, 대지면적을 표시합니다."],
   ["학군", "NEIS 학교기본정보와 거리 계산을 MVP 2에서 연결합니다."],
@@ -33,52 +38,78 @@ export function ApartmentDetailClient({
   const mockApartment = mockApartments.find((item) => item.id === apartmentId);
   const [session, setSession] = useState<Session | null>(null);
   const [apartment, setApartment] = useState<ApartmentRowData | null>(null);
+  const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
+  const [syncMonth, setSyncMonth] = useState(getCurrentDealYmd());
+  const [isSyncing, setIsSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
+  const isAdmin = isAdminRole(getRoleFromAppMetadata(session?.user.app_metadata));
+
+  const loadApartment = useCallback(async () => {
+    if (!supabase || mockApartment) {
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+
+    setSession(sessionData.session);
+
+    if (!sessionData.session) {
+      setApartment(null);
+      setTransactions([]);
+      return;
+    }
+
+    const [
+      { data: apartmentData, error: apartmentError },
+      { data: transactionData, error: transactionError },
+    ] = await Promise.all([
+      supabase
+        .from("apartments")
+        .select("*")
+        .eq("id", apartmentId)
+        .maybeSingle(),
+      supabase
+        .from("apartment_transactions")
+        .select("*")
+        .eq("apartment_id", apartmentId)
+        .order("deal_date", { ascending: false })
+        .limit(30),
+    ]);
+
+    if (apartmentError) {
+      setMessage(apartmentError.message);
+    } else {
+      setApartment((apartmentData as ApartmentRowData | null) ?? null);
+    }
+
+    if (transactionError) {
+      setMessage(transactionError.message);
+    } else {
+      setTransactions((transactionData ?? []) as ApartmentTransactionRow[]);
+    }
+  }, [apartmentId, mockApartment, supabase]);
 
   useEffect(() => {
     if (!supabase || mockApartment) {
       return;
     }
 
-    const client = supabase;
     let isMounted = true;
 
-    async function loadApartment() {
-      const { data: sessionData } = await client.auth.getSession();
-
-      if (!isMounted) {
-        return;
+    supabase.auth.getSession().then(() => {
+      if (isMounted) {
+        void loadApartment();
       }
-
-      setSession(sessionData.session);
-
-      if (!sessionData.session) {
-        return;
-      }
-
-      const { data, error } = await client
-        .from("apartments")
-        .select("*")
-        .eq("id", apartmentId)
-        .maybeSingle();
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (error) {
-        setMessage(error.message);
-      } else {
-        setApartment((data as ApartmentRowData | null) ?? null);
-      }
-    }
-
-    void loadApartment();
+    });
 
     const {
       data: { subscription },
-    } = client.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!isMounted) {
+        return;
+      }
+
       setSession(nextSession);
 
       if (nextSession) {
@@ -92,7 +123,55 @@ export function ApartmentDetailClient({
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [apartmentId, mockApartment, supabase]);
+  }, [loadApartment, mockApartment, supabase]);
+
+  async function handleTransactionSync() {
+    if (!supabase || !session || !apartment || !isAdmin) {
+      setMessage("실거래가 동기화는 운영자 계정만 실행할 수 있습니다.");
+      return;
+    }
+
+    if (!apartment.lawd_cd) {
+      setMessage("실거래가 조회를 위해 법정동코드를 먼저 입력하세요.");
+      return;
+    }
+
+    setIsSyncing(true);
+    setMessage(null);
+
+    const {
+      data: { session: currentSession },
+    } = await supabase.auth.getSession();
+
+    const response = await fetch(
+      `/api/apartments/${apartmentId}/transactions/sync`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${currentSession?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({ dealYmd: syncMonth }),
+      },
+    );
+    const result = (await response.json()) as {
+      error?: string;
+      matchedCount?: number;
+      totalCount?: number;
+      dealYmd?: string;
+    };
+
+    if (!response.ok) {
+      setMessage(result.error ?? "실거래가 동기화에 실패했습니다.");
+    } else {
+      await loadApartment();
+      setMessage(
+        `${result.dealYmd} 실거래가 ${result.matchedCount ?? 0}건을 반영했습니다. 전체 조회 ${result.totalCount ?? 0}건 중 단지명 일치 거래만 저장했습니다.`,
+      );
+    }
+
+    setIsSyncing(false);
+  }
 
   const title = mockApartment?.name ?? apartment?.display_name ?? apartment?.name;
   const address = mockApartment?.address ?? apartment?.address ?? "주소 미입력";
@@ -130,6 +209,98 @@ export function ApartmentDetailClient({
         </div>
       </section>
 
+      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+              가격/실거래가
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              국토부 아파트 매매 실거래가 상세 자료를 법정동코드와 계약년월로
+              조회하고, 단지명이 일치한 거래만 저장합니다.
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              법정동코드: {apartment?.lawd_cd ?? "미입력"}
+            </p>
+          </div>
+          {!mockApartment && session && isAdmin ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                계약년월
+                <input
+                  value={syncMonth}
+                  onChange={(event) => setSyncMonth(event.target.value)}
+                  className="w-32 rounded-md border border-slate-300 px-3 py-2"
+                  placeholder="202501"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void handleTransactionSync()}
+                disabled={isSyncing || !apartment?.lawd_cd}
+                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+              >
+                {isSyncing ? "동기화 중" : "실거래가 동기화"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        {transactions.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left">
+              <thead className="bg-slate-50 text-sm text-slate-600">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">계약일</th>
+                  <th className="px-4 py-3 font-semibold">전용면적</th>
+                  <th className="px-4 py-3 font-semibold">층</th>
+                  <th className="px-4 py-3 font-semibold">거래금액</th>
+                  <th className="px-4 py-3 font-semibold">원천 단지명</th>
+                  <th className="px-4 py-3 font-semibold">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((transaction) => (
+                  <tr
+                    key={transaction.id}
+                    className="border-b border-slate-200 last:border-0"
+                  >
+                    <td className="px-4 py-3 text-sm text-slate-700">
+                      {formatDate(transaction.deal_date)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">
+                      {Number(transaction.exclusive_area_m2).toLocaleString("ko-KR", {
+                        maximumFractionDigits: 2,
+                      })}
+                      ㎡
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">
+                      {transaction.floor ?? "-"}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-slate-950">
+                      {formatKrw(transaction.deal_amount_krw)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">
+                      {transaction.apartment_name_from_source ?? "-"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">
+                      {transaction.cancel_yn
+                        ? `해제 ${transaction.cancel_date ?? ""}`
+                        : "정상"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+            아직 저장된 실거래가가 없습니다. 운영자 계정에서 법정동코드와 계약년월을
+            확인한 뒤 동기화하세요.
+          </p>
+        )}
+      </section>
+
       <section className="grid gap-4 md:grid-cols-2">
         {sections.map(([sectionTitle, body]) => (
           <article
@@ -152,4 +323,9 @@ export function ApartmentDetailClient({
       </Link>
     </div>
   );
+}
+
+function getCurrentDealYmd() {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
 }

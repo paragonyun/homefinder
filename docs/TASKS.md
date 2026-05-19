@@ -38,10 +38,16 @@
 
 ## 데이터 연동
 
-- [ ] 국토부 실거래가 API 문서 확인
-- [ ] XML 응답 샘플 확보
-- [ ] `raw_api_responses` 저장 로직
-- [ ] 단지명/주소 매칭 로직
+- [x] 국토부 실거래가 API 문서 확인
+- [x] XML 응답 샘플 기반 파서 테스트
+- [x] `raw_api_responses` 저장 로직
+- [x] 단지명 정확 일치 매칭 로직
+- [x] `apartment_transactions` migration 작성
+- [x] 실거래가 동기화 route 작성
+- [x] 단지 상세 거래 테이블 표시
+- [ ] Supabase에 거래 migration 실제 적용
+- [ ] Vercel에 `MOLIT_API_KEY` 등록
+- [ ] 실제 국토부 API 응답으로 운영 환경 동기화 검증
 - [ ] 평형대 bucket 계산
 - [ ] K-apt API 문서 확인
 - [ ] K-apt 코드 수동 보정 UI

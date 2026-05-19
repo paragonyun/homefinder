@@ -49,6 +49,42 @@ describe("validateApartmentInput", () => {
       error: "알 수 없는 단지 상태입니다.",
     });
   });
+
+  it("keeps manual matching fields separate from price data", () => {
+    expect(
+      validateApartmentInput({
+        name: " 래미안에스티움 ",
+        status: "candidate",
+        lawdCd: " 11560 ",
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        name: "래미안에스티움",
+        neighborhood_id: null,
+        address: null,
+        road_address: null,
+        lawd_cd: "11560",
+        status: "candidate",
+        memo: null,
+        kb_url: null,
+        naver_land_url: null,
+      },
+    });
+  });
+
+  it("requires lawd_cd to be five digits when present", () => {
+    expect(
+      validateApartmentInput({
+        name: "래미안에스티움",
+        status: "candidate",
+        lawdCd: "115601",
+      }),
+    ).toEqual({
+      ok: false,
+      error: "법정동코드는 5자리 숫자로 입력하세요.",
+    });
+  });
 });
 
 describe("validateFieldNoteInput", () => {

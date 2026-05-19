@@ -6,15 +6,24 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 
 - 데이터명: 아파트 매매 실거래가
 - 제공기관: 국토교통부 / 공공데이터포털
-- API 이름: 아파트 매매 실거래자료 API 후보
+- API 이름: 국토교통부_아파트 매매 실거래가 상세 자료
 - 인증 방식: 공공데이터포털 서비스키
-- 응답 형식: XML 가능성이 높음
-- 주요 파라미터: 법정동코드, 계약년월, 서비스키
-- 호출 제한: 공공데이터포털 정책 확인 필요
-- 약관/주의사항: 거래 취소/해제 필드가 있으면 반영
+- Endpoint: `https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev`
+- 응답 형식: XML
+- 주요 파라미터: `serviceKey`, `LAWD_CD`, `DEAL_YMD`, `pageNo`, `numOfRows`
+- 호출 제한: 공공데이터포털 개발계정 기준 신청 가능 트래픽 10,000건
+- 약관/주의사항: 거래 취소/해제 필드(`cdealType`, `cdealDay`)를 저장
 - MVP 적용 여부: MVP 1 핵심
 - 대체 데이터 소스: 없음. 공식 API 우선
 - 구현 난이도: 중간. XML 파싱과 단지명 매칭 필요
+
+구현 정책:
+
+- 법정동코드는 단지 수정 화면에서 수동 보정합니다.
+- API 키는 `MOLIT_API_KEY`로 서버 route에서만 읽습니다.
+- 원천 XML은 `raw_api_responses`에 저장하고, 정규화 거래는 `apartment_transactions`에 저장합니다.
+- 단지명은 공백 제거 후 정확히 일치하는 거래만 저장합니다. 표기 차이가 있으면 alias/matching 개선을 후속 작업으로 처리합니다.
+- 같은 계약월 동기화를 반복해도 `apartment_id + source_name + source_hash` unique key로 중복 저장을 막습니다.
 
 ## K-apt 공동주택 기본정보
 

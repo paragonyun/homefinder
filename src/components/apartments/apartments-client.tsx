@@ -26,6 +26,7 @@ type ApartmentFormState = {
   neighborhoodId: string;
   address: string;
   roadAddress: string;
+  lawdCd: string;
   status: string;
   memo: string;
   kbUrl: string;
@@ -38,6 +39,7 @@ const emptyForm: ApartmentFormState = {
   neighborhoodId: "",
   address: "",
   roadAddress: "",
+  lawdCd: "",
   status: "candidate",
   memo: "",
   kbUrl: "",
@@ -133,7 +135,9 @@ export function ApartmentsClient() {
       address: apartment.address ?? "주소 미입력",
       latestPrice: "실거래가 연동 전",
       areaSummary: "평형대 계산 전",
-      sourceState: apartment.kapt_code ? "K-apt 코드 입력됨" : "매칭 필요",
+      sourceState: apartment.lawd_cd
+        ? `법정동코드 ${apartment.lawd_cd}`
+        : "법정동코드 필요",
       note: apartment.memo ?? "메모 없음",
     }));
   }, [apartments, neighborhoods, session]);
@@ -198,6 +202,7 @@ export function ApartmentsClient() {
       neighborhoodId: apartment.neighborhood_id ?? "",
       address: apartment.address ?? "",
       roadAddress: apartment.road_address ?? "",
+      lawdCd: apartment.lawd_cd ?? "",
       status: apartment.status,
       memo: apartment.memo ?? "",
       kbUrl: apartment.kb_url ?? "",
@@ -286,6 +291,17 @@ export function ApartmentsClient() {
                 }
                 className="rounded-md border border-slate-300 px-3 py-2"
                 placeholder="예: 서울 영등포구 신길동"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              법정동코드
+              <input
+                value={form.lawdCd}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, lawdCd: event.target.value }))
+                }
+                className="rounded-md border border-slate-300 px-3 py-2"
+                placeholder="예: 11560"
               />
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">

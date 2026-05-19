@@ -29,8 +29,12 @@
 - [x] 단지 CRUD
 - [x] 임장 메모 CRUD
 - [x] 상태 변경 UI
-- [ ] Supabase 환경변수 Vercel 등록
-- [ ] Supabase migration 실제 적용
+- [x] Supabase 환경변수 Vercel 등록
+- [x] 초기 Supabase migration 실제 적용
+- [x] Magic link 제거 및 비밀번호 로그인 전환
+- [x] 동네/단지 CUD 운영자 제한 RLS 추가
+- [ ] 운영자 제한 migration 실제 적용
+- [ ] Supabase 운영자 계정 생성 및 `app_metadata.role = admin` 설정
 
 ## 데이터 연동
 

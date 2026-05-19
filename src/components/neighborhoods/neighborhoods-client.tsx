@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { NeighborhoodCard } from "@/components/neighborhoods/neighborhood-card";
+import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { neighborhoods as mockNeighborhoods } from "@/lib/mock-data";
 import { validateNeighborhoodInput } from "@/lib/forms/home-data";
 import {
@@ -41,6 +42,7 @@ export function NeighborhoodsClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
+  const isAdmin = isAdminRole(getRoleFromAppMetadata(session?.user.app_metadata));
 
   const loadData = useCallback(async () => {
     if (!supabase) {
@@ -141,8 +143,8 @@ export function NeighborhoodsClient() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!supabase || !session) {
-      setMessage("Supabase 연결과 로그인이 필요합니다.");
+    if (!supabase || !session || !isAdmin) {
+      setMessage("동네 관리는 운영자 계정만 가능합니다.");
       return;
     }
 
@@ -177,7 +179,7 @@ export function NeighborhoodsClient() {
   }
 
   async function handleDelete(id: string) {
-    if (!supabase || !session) {
+    if (!supabase || !session || !isAdmin) {
       return;
     }
 
@@ -209,7 +211,7 @@ export function NeighborhoodsClient() {
     <div className="grid gap-5">
       <AuthPanel />
 
-      {session ? (
+      {session && isAdmin ? (
         <form
           onSubmit={handleSubmit}
           className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5"
@@ -292,8 +294,14 @@ export function NeighborhoodsClient() {
 
       {!isSupabaseConfigured || !session ? (
         <p className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
-          현재는 예시 데이터가 표시됩니다. Supabase 환경변수와 로그인 세션이
-          준비되면 실제 CRUD 목록으로 전환됩니다.
+          현재는 예시 데이터가 표시됩니다. 운영자 계정으로 로그인하면 실제 관심
+          동네 목록을 추가/수정/삭제할 수 있습니다.
+        </p>
+      ) : null}
+
+      {session && !isAdmin ? (
+        <p className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
+          읽기 전용 계정입니다. 관심 동네 추가, 수정, 삭제는 운영자만 가능합니다.
         </p>
       ) : null}
 
@@ -301,7 +309,7 @@ export function NeighborhoodsClient() {
         {cards.map((neighborhood) => (
           <div key={neighborhood.id} className="grid gap-2">
             <NeighborhoodCard {...neighborhood} />
-            {session ? (
+            {session && isAdmin ? (
               <div className="flex gap-2">
                 <button
                   type="button"

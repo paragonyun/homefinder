@@ -59,12 +59,39 @@ supabase db push
 - `apartment_status`, `confidence_level` enum
 - 사용자별 RLS 정책
 
+추가 migration `20260519000100_admin_only_core_mutations.sql`은 관심 동네와
+관심 단지의 생성/수정/삭제를 운영자 계정으로 제한합니다. Supabase SQL
+Editor에서 migration 파일을 순서대로 실행합니다.
+
 Vercel에는 최소한 아래 환경변수를 추가해야 실제 로그인과 CRUD가 동작합니다.
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 `SUPABASE_SERVICE_ROLE_KEY`는 후속 서버 배치나 외부 API 동기화에서만 사용합니다.
+
+## 운영자 계정 설정
+
+개인용 운영은 Supabase Dashboard에서 미리 만든 계정만 로그인하도록 둡니다.
+
+1. Supabase Dashboard에서 `Authentication` > `Users`로 이동합니다.
+2. `Add user`로 이메일과 비밀번호를 가진 계정을 만듭니다.
+3. 가능하면 생성 시 `Auto Confirm User`를 켭니다. 이미 만들었다면 이메일 확인이
+   완료된 상태인지 확인합니다.
+4. `Authentication` > `Sign In / Providers`에서 `Allow new users to sign up`을
+   끕니다. 이렇게 하면 기존 사용자만 로그인할 수 있습니다.
+5. SQL Editor에서 아래 쿼리의 이메일을 운영자 이메일로 바꿔 실행합니다.
+
+```sql
+update auth.users
+set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb)
+  || jsonb_build_object('role', 'admin')
+where email = 'you@example.com';
+```
+
+앱은 `auth.jwt() -> 'app_metadata' ->> 'role' = 'admin'`인 계정만 관심 동네와
+관심 단지를 추가/수정/삭제할 수 있게 처리합니다. 이미 로그인한 상태에서 role을
+부여했다면 로그아웃 후 다시 로그인해야 새 JWT에 권한이 반영됩니다.
 
 ## 핵심 원칙
 
@@ -88,4 +115,5 @@ Vercel에는 최소한 아래 환경변수를 추가해야 실제 로그인과 C
 
 ## 현재 상태
 
-현재 앱은 첫 커밋용 scaffold입니다. 외부 API 호출, Supabase migration 적용, CRUD 완성, 로그인 완성은 아직 포함하지 않습니다.
+현재 앱은 Supabase Auth와 기본 CRUD scaffold가 연결되어 있습니다. 외부 API 호출,
+실거래가 동기화, K-apt 연동, 지도/교통 연동은 아직 포함하지 않습니다.

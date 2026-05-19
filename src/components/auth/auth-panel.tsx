@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { getAuthCallbackUrl } from "@/lib/auth/redirect-url";
+import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -11,6 +11,7 @@ import {
 export function AuthPanel() {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const supabase = createSupabaseBrowserClient();
@@ -40,7 +41,7 @@ export function AuthPanel() {
     };
   }, [supabase]);
 
-  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
+  async function handlePasswordLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!supabase) {
@@ -50,17 +51,13 @@ export function AuthPanel() {
     setIsPending(true);
     setMessage(null);
 
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      options: {
-        emailRedirectTo: getAuthCallbackUrl(window.location.origin, "/settings"),
-      },
+      password,
     });
 
     setIsPending(false);
-    setMessage(
-      error ? error.message : "로그인 링크를 이메일로 보냈습니다.",
-    );
+    setMessage(error ? error.message : null);
   }
 
   async function handleLogout() {
@@ -83,12 +80,21 @@ export function AuthPanel() {
   }
 
   if (session) {
+    const role = getRoleFromAppMetadata(session.user.app_metadata);
+
     return (
       <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 sm:flex-row sm:items-center sm:justify-between">
-        <p>
-          로그인됨:{" "}
-          <span className="font-semibold">{session.user.email}</span>
-        </p>
+        <div>
+          <p>
+            로그인됨:{" "}
+            <span className="font-semibold">{session.user.email}</span>
+          </p>
+          <p className="mt-1 text-emerald-900">
+            {isAdminRole(role)
+              ? "운영자 권한으로 동네와 단지를 관리할 수 있습니다."
+              : "읽기 전용 계정입니다. 동네와 단지 관리는 운영자만 가능합니다."}
+          </p>
+        </div>
         <button
           type="button"
           onClick={handleLogout}
@@ -102,11 +108,11 @@ export function AuthPanel() {
 
   return (
     <form
-      onSubmit={handleLogin}
-      className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-[1fr_auto]"
+      onSubmit={handlePasswordLogin}
+      className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-2"
     >
       <label className="grid gap-2 text-sm font-medium text-slate-700">
-        이메일 로그인
+        이메일
         <input
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -116,12 +122,23 @@ export function AuthPanel() {
           className="rounded-md border border-slate-300 px-3 py-2"
         />
       </label>
+      <label className="grid gap-2 text-sm font-medium text-slate-700">
+        비밀번호
+        <input
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          type="password"
+          required
+          autoComplete="current-password"
+          className="rounded-md border border-slate-300 px-3 py-2"
+        />
+      </label>
       <button
         type="submit"
         disabled={isPending}
-        className="self-end rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+        className="w-fit rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400 sm:col-span-2"
       >
-        {isPending ? "전송 중" : "Magic link 전송"}
+        {isPending ? "로그인 중" : "로그인"}
       </button>
       {message ? (
         <p className="text-sm text-slate-600 sm:col-span-2">{message}</p>

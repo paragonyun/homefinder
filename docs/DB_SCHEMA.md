@@ -1,6 +1,6 @@
 # DB Schema
 
-Supabase PostgreSQL 기준 초안입니다. 실제 초기 migration은 `supabase/migrations/20260518000100_initial_core.sql`에 있습니다.
+Supabase PostgreSQL 기준 초안입니다. 실제 초기 migration은 `supabase/migrations/20260518000100_initial_core.sql`에 있고, 운영자 제한 정책은 `supabase/migrations/20260519000100_admin_only_core_mutations.sql`에 있습니다.
 
 ## 공통 원칙
 
@@ -222,5 +222,6 @@ MVP 3의 점수화와 판단 메모를 위한 테이블입니다. 첫 단계에�
 ## RLS 방향
 
 - 모든 사용자 데이터는 `user_id = auth.uid()` 조건으로 접근합니다.
+- 관심 동네와 관심 단지의 생성/수정/삭제는 `auth.jwt() -> 'app_metadata' ->> 'role' = 'admin'`인 운영자 계정만 가능합니다.
 - 공유 기능은 MVP 이후 별도 정책으로 검토합니다.
 - `SUPABASE_SERVICE_ROLE_KEY`는 서버와 batch에서만 사용합니다.

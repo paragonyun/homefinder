@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { getAuthCallbackUrl } from "@/lib/auth/redirect-url";
 import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -52,7 +53,7 @@ export function AuthPanel() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: getAuthCallbackUrl(window.location.origin, "/settings"),
       },
     });
 

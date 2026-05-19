@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 
 export const MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT =
-  "https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev";
+  "http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev";
 
 type MolitXmlRecord = Record<string, unknown>;
 

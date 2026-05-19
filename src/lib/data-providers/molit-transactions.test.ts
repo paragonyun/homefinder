@@ -167,6 +167,7 @@ describe("buildMolitApartmentTradeUrl", () => {
       numOfRows: 1000,
     });
 
+    expect(url).toMatch(/^http:\/\/apis\.data\.go\.kr\//);
     expect(url).toContain("serviceKey=abc%2B%2F%3D");
     expect(url).toContain("LAWD_CD=11560");
     expect(url).toContain("DEAL_YMD=202501");

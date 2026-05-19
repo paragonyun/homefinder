@@ -8,7 +8,7 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 - 제공기관: 국토교통부 / 공공데이터포털
 - API 이름: 국토교통부_아파트 매매 실거래가 상세 자료
 - 인증 방식: 공공데이터포털 서비스키
-- Endpoint: `https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev`
+- Endpoint: `http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev`
 - 응답 형식: XML
 - 주요 파라미터: `serviceKey`, `LAWD_CD`, `DEAL_YMD`, `pageNo`, `numOfRows`
 - 호출 제한: 공공데이터포털 개발계정 기준 신청 가능 트래픽 10,000건
@@ -31,6 +31,7 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 - `MOLIT_API_KEY`가 Vercel Production 환경변수에 등록되어 있고 redeploy 되었는지 확인합니다.
 - 공공데이터포털에서 `국토교통부_아파트 매매 실거래가 상세 자료`를 활용신청했는지 확인합니다. 비슷한 이름의 일반 실거래가 API만 신청하면 상세 API에서 권한 오류가 날 수 있습니다.
 - Encoding 키와 Decoding 키 모두 허용하지만, 가능하면 Decoding 키를 사용합니다.
+- 공공데이터포털의 Requested Link는 `http://apis.data.go.kr/...`입니다. `https://`에서 gateway `Forbidden`이 나올 수 있어 앱도 공식 요청 URL과 같은 `http://` endpoint를 사용합니다.
 - 앱은 국토부 non-2xx 응답의 XML 에러코드를 화면에 표시합니다. `SERVICE_ACCESS_DENIED_ERROR`는 보통 해당 API 활용 권한 또는 승인 상태 문제입니다.
 
 ## K-apt 공동주택 기본정보

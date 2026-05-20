@@ -28,6 +28,7 @@ type ApartmentFormState = {
   address: string;
   roadAddress: string;
   lawdCd: string;
+  kaptCode: string;
   status: string;
   memo: string;
   molitAliases: string;
@@ -42,6 +43,7 @@ const emptyForm: ApartmentFormState = {
   address: "",
   roadAddress: "",
   lawdCd: "",
+  kaptCode: "",
   status: "candidate",
   memo: "",
   molitAliases: "",
@@ -165,9 +167,10 @@ export function ApartmentsClient() {
       address: apartment.address ?? "주소 미입력",
       latestPrice: "실거래가 연동 전",
       areaSummary: "평형대 계산 전",
-      sourceState: apartment.lawd_cd
-        ? `법정동코드 ${apartment.lawd_cd}`
-        : "법정동코드 필요",
+      sourceState: [
+        apartment.lawd_cd ? `법정동코드 ${apartment.lawd_cd}` : "법정동코드 필요",
+        apartment.kapt_code ? `K-apt ${apartment.kapt_code}` : "K-apt 코드 필요",
+      ].join(" / "),
       note: apartment.memo ?? "메모 없음",
     }));
   }, [apartments, neighborhoods, session]);
@@ -278,6 +281,7 @@ export function ApartmentsClient() {
       address: apartment.address ?? "",
       roadAddress: apartment.road_address ?? "",
       lawdCd: apartment.lawd_cd ?? "",
+      kaptCode: apartment.kapt_code ?? "",
       status: apartment.status,
       memo: apartment.memo ?? "",
       molitAliases: aliases
@@ -387,6 +391,23 @@ export function ApartmentsClient() {
               <span className="text-xs leading-5 text-slate-500">
                 5자리 시군구 코드 또는 10자리 법정동코드를 입력할 수 있습니다.
                 국토부 조회에는 앞 5자리만 사용합니다.
+              </span>
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              K-apt 코드
+              <input
+                value={form.kaptCode}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    kaptCode: event.target.value,
+                  }))
+                }
+                className="rounded-md border border-slate-300 px-3 py-2"
+                placeholder="예: A15876402"
+              />
+              <span className="text-xs leading-5 text-slate-500">
+                K-apt 기본정보 동기화에 사용할 단지 코드를 수동으로 입력합니다.
               </span>
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700">

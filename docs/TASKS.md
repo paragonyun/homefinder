@@ -21,7 +21,7 @@
 
 ## 다음 단계: DB와 CRUD
 
-- [ ] Supabase 프로젝트 생성
+- [x] Supabase 프로젝트 생성
 - [x] migration 작성
 - [x] RLS 정책 작성
 - [x] Supabase Auth 연결
@@ -49,11 +49,33 @@
 - [x] 단지 상세 거래 테이블 표시
 - [x] 최근월 기준 자동 실거래가 동기화
 - [ ] Supabase에 거래 migration 실제 적용
-- [ ] Vercel에 `MOLIT_API_KEY` 등록
+- [x] Vercel에 `MOLIT_API_KEY` 등록
 - [ ] 실제 국토부 API 응답으로 운영 환경 동기화 검증
 - [x] 평형대 bucket 계산
-- [ ] K-apt API 문서 확인
-- [ ] K-apt 코드 수동 보정 UI
+- [x] K-apt API 문서 확인
+- [x] K-apt 코드 수동 보정 UI
+- [x] `apartment_basic_info` migration 작성
+- [x] K-apt 기본정보 parser 테스트
+- [x] K-apt 기본정보 동기화 route 작성
+- [x] 단지 상세 기본정보 표시
+- [x] 비교 화면 K-apt 기본정보 표시
+- [ ] Supabase에 K-apt 기본정보 migration 실제 적용
+- [ ] Vercel에 `KAPT_API_KEY` 등록
+- [ ] 실제 K-apt API 응답으로 운영 환경 동기화 검증
+
+## 운영 적용 메모
+
+- [x] GitHub remote 연결 및 Vercel 프로젝트 연결
+- [x] Vercel Production Node.js 24 설정
+- [x] Vercel에 Supabase 공개 환경변수 등록
+- [x] Vercel에 `MOLIT_API_KEY` 등록
+- [x] 초기 Supabase migration 실제 적용
+- [ ] Supabase에 `20260519000100_admin_only_core_mutations.sql` 적용 확인
+- [ ] Supabase에 `20260519000200_apartment_transactions.sql` 적용 확인
+- [ ] Supabase에 `20260520000100_apartment_aliases.sql` 적용 확인
+- [ ] Supabase에 `20260520000200_apartment_basic_info.sql` 적용
+- [ ] Vercel에 `KAPT_API_KEY` 등록
+- [ ] Supabase 운영자 계정 `app_metadata.role = admin` 설정 확인
 
 ## 금지/주의
 

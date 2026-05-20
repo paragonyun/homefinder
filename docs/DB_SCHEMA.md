@@ -152,8 +152,18 @@ Supabase Auth 사용자 보조 프로필입니다.
 
 ### apartment_basic_info
 
+실제 migration: `supabase/migrations/20260520000200_apartment_basic_info.sql`
+
 - `id uuid primary key`
+- `user_id uuid references users(id)`
 - `apartment_id uuid references apartments(id)`
+- `raw_api_response_id uuid references raw_api_responses(id)`
+- `source_name text`
+- `source_ref text`
+- `kapt_code text`
+- `kapt_name_from_source text`
+- `legal_address_from_source text`
+- `road_address_from_source text`
 - `household_count integer`
 - `building_count integer`
 - `approval_date date`
@@ -162,8 +172,7 @@ Supabase Auth 사용자 보조 프로필입니다.
 - `sale_type text`
 - `parking_count integer`
 - `elevator_count integer`
-- `source_name text`
-- `source_ref text`
+- `gross_floor_area_m2 numeric`
 - `confidence_level confidence_level`
 - `fetched_at timestamptz`
 - `created_at timestamptz`

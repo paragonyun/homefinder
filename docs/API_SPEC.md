@@ -54,6 +54,16 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 - 매칭: `apartments.name`, `display_name`, `apartment_aliases.source = molit` alias를 사용합니다. 매칭 실패 시 `candidateNames`에 국토부 원천명 후보를 반환할 수 있습니다.
 - 실패: `MOLIT_API_KEY` 없음, 법정동코드 없음, 권한 없음, 단지명 매칭 없음을 명시적으로 반환합니다.
 
+현재 구현된 K-apt 기본정보 route:
+
+- `POST /api/apartments/:id/basic-info/sync`
+- 인증: `Authorization: Bearer <Supabase access token>`
+- 권한: `app_metadata.role = admin`
+- 요청 body: 기본값은 `{}`
+- 동작: 단지의 `kapt_code`로 K-apt 공동주택 기본정보를 조회하고, 원천 JSON을 `raw_api_responses`에 저장한 뒤 `apartment_basic_info`에 upsert합니다.
+- 저장: 세대수, 동수, 사용승인일, 난방방식, 관리방식, 분양형태, 주차대수, 승강기대수, 건축물대장상 연면적, 원천 단지명/주소를 저장합니다.
+- 실패: `KAPT_API_KEY` 없음, K-apt 코드 없음, 권한 없음, 원천 데이터 없음, 공공데이터포털 에러 응답을 명시적으로 반환합니다.
+
 ## Transactions
 
 - `GET /api/apartments/:id/transactions`
@@ -84,6 +94,8 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 - `POST /api/compare/apartments`
 
 비교 대상 단지 id 목록을 받아 주요 항목 테이블에 필요한 값을 반환합니다.
+
+현재 `/compare` 화면은 등록 단지, 국토부 실거래가 요약, K-apt 세대수/주차/사용승인일을 클라이언트에서 함께 조회해 비교합니다. `apartment_basic_info` migration이 아직 적용되지 않은 환경에서는 기본정보만 비워 두고 기존 비교표를 유지합니다.
 
 ## Decision Reviews
 

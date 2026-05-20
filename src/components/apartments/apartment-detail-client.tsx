@@ -7,12 +7,17 @@ import { AuthPanel } from "@/components/auth/auth-panel";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { apartments as mockApartments } from "@/lib/mock-data";
-import { summarizeApartmentPrices } from "@/lib/services/price-summary";
+import {
+  buildMonthlyPriceTrendLines,
+  summarizeApartmentPrices,
+  type MonthlyPriceTrendLine,
+} from "@/lib/services/price-summary";
 import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 import type {
+  ApartmentBasicInfoRow,
   ApartmentRowData,
   ApartmentTransactionRow,
 } from "@/lib/supabase/table-types";
@@ -24,7 +29,6 @@ type ApartmentDetailClientProps = {
 };
 
 const sections = [
-  ["단지 기본정보", "K-apt 매칭 후 세대수, 동수, 사용승인일, 난방, 주차 정보를 표시합니다."],
   ["건축정보", "건축물대장 후보 데이터가 확보되면 용적률, 건폐율, 대지면적을 표시합니다."],
   ["학군", "NEIS 학교기본정보와 거리 계산을 MVP 2에서 연결합니다."],
   ["접근성", "여의도역/강남역과 커스텀 목적지 소요시간을 표시합니다."],
@@ -39,11 +43,13 @@ export function ApartmentDetailClient({
   const mockApartment = mockApartments.find((item) => item.id === apartmentId);
   const [session, setSession] = useState<Session | null>(null);
   const [apartment, setApartment] = useState<ApartmentRowData | null>(null);
+  const [basicInfo, setBasicInfo] = useState<ApartmentBasicInfoRow | null>(null);
   const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
   const [candidateNames, setCandidateNames] = useState<
     Array<{ name: string; count: number }>
   >([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isBasicInfoSyncing, setIsBasicInfoSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
   const isAdmin = isAdminRole(getRoleFromAppMetadata(session?.user.app_metadata));
@@ -59,12 +65,14 @@ export function ApartmentDetailClient({
 
     if (!sessionData.session) {
       setApartment(null);
+      setBasicInfo(null);
       setTransactions([]);
       return;
     }
 
     const [
       { data: apartmentData, error: apartmentError },
+      { data: basicInfoData, error: basicInfoError },
       { data: transactionData, error: transactionError },
     ] = await Promise.all([
       supabase
@@ -73,17 +81,34 @@ export function ApartmentDetailClient({
         .eq("id", apartmentId)
         .maybeSingle(),
       supabase
+        .from("apartment_basic_info")
+        .select("*")
+        .eq("apartment_id", apartmentId)
+        .order("fetched_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
         .from("apartment_transactions")
         .select("*")
         .eq("apartment_id", apartmentId)
         .order("deal_date", { ascending: false })
-        .limit(30),
+        .limit(240),
     ]);
 
     if (apartmentError) {
       setMessage(apartmentError.message);
     } else {
       setApartment((apartmentData as ApartmentRowData | null) ?? null);
+    }
+
+    if (basicInfoError && !isMissingTableError(basicInfoError)) {
+      setMessage(basicInfoError.message);
+    } else {
+      setBasicInfo(
+        basicInfoError
+          ? null
+          : ((basicInfoData as ApartmentBasicInfoRow | null) ?? null),
+      );
     }
 
     if (transactionError) {
@@ -119,6 +144,8 @@ export function ApartmentDetailClient({
         void loadApartment();
       } else {
         setApartment(null);
+        setBasicInfo(null);
+        setTransactions([]);
       }
     });
 
@@ -141,47 +168,113 @@ export function ApartmentDetailClient({
 
     setIsSyncing(true);
     setMessage(null);
+    setCandidateNames([]);
 
-    const {
-      data: { session: currentSession },
-    } = await supabase.auth.getSession();
+    try {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
 
-    const response = await fetch(
-      `/api/apartments/${apartmentId}/transactions/sync`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${currentSession?.access_token ?? ""}`,
+      const response = await fetch(
+        `/api/apartments/${apartmentId}/transactions/sync`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${currentSession?.access_token ?? ""}`,
+          },
+          body: JSON.stringify({}),
         },
-        body: JSON.stringify({}),
-      },
-    );
-    const result = (await response.json()) as {
-      error?: string;
-      matchedCount?: number;
-      totalCount?: number;
-      dealYmd?: string;
-      monthsChecked?: number;
-      candidateNames?: Array<{ name: string; count: number }>;
-    };
-
-    if (!response.ok) {
-      setMessage(result.error ?? "실거래가 동기화에 실패했습니다.");
-    } else {
-      await loadApartment();
-      const monthsChecked = result.monthsChecked ?? 0;
-      const matchedCount = result.matchedCount ?? 0;
-
-      setCandidateNames(result.candidateNames ?? []);
-      setMessage(
-        matchedCount > 0 && result.dealYmd
-          ? `최근 ${monthsChecked}개월을 확인했고, ${result.dealYmd} 실거래가 ${matchedCount}건을 반영했습니다.`
-          : `최근 ${monthsChecked}개월에서 단지명 일치 거래를 찾지 못했습니다.`,
       );
+      const result = await readJsonResult<{
+        error?: string;
+        matchedCount?: number;
+        totalCount?: number;
+        dealYmd?: string;
+        monthsChecked?: number;
+        candidateNames?: Array<{ name: string; count: number }>;
+      }>(response);
+
+      if (!response.ok) {
+        setMessage(result.error ?? "실거래가 동기화에 실패했습니다.");
+      } else {
+        await loadApartment();
+        const monthsChecked = result.monthsChecked ?? 0;
+        const matchedCount = result.matchedCount ?? 0;
+
+        setCandidateNames(result.candidateNames ?? []);
+        setMessage(
+          matchedCount > 0 && result.dealYmd
+            ? `최근 ${monthsChecked}개월을 확인했고, ${result.dealYmd} 실거래가 ${matchedCount}건을 반영했습니다.`
+            : `최근 ${monthsChecked}개월에서 단지명 일치 거래를 찾지 못했습니다.`,
+        );
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "실거래가 동기화에 실패했습니다.",
+      );
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
+  async function handleBasicInfoSync() {
+    if (!supabase || !session || !apartment || !isAdmin) {
+      setMessage("K-apt 기본정보 동기화는 운영자 계정만 실행할 수 있습니다.");
+      return;
     }
 
-    setIsSyncing(false);
+    if (!apartment.kapt_code) {
+      setMessage("K-apt 기본정보 조회를 위해 K-apt 코드를 먼저 입력하세요.");
+      return;
+    }
+
+    setIsBasicInfoSyncing(true);
+    setMessage(null);
+
+    try {
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
+
+      const response = await fetch(
+        `/api/apartments/${apartmentId}/basic-info/sync`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${currentSession?.access_token ?? ""}`,
+          },
+          body: JSON.stringify({}),
+        },
+      );
+      const result = await readJsonResult<{
+        error?: string;
+        kaptName?: string | null;
+        fetchedAt?: string;
+      }>(response);
+
+      if (!response.ok) {
+        setMessage(result.error ?? "K-apt 기본정보 동기화에 실패했습니다.");
+      } else {
+        await loadApartment();
+        setMessage(
+          result.kaptName
+            ? `${result.kaptName} K-apt 기본정보를 반영했습니다.`
+            : "K-apt 기본정보를 반영했습니다.",
+        );
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "K-apt 기본정보 동기화에 실패했습니다.",
+      );
+    } finally {
+      setIsBasicInfoSyncing(false);
+    }
   }
 
   const title = mockApartment?.name ?? apartment?.display_name ?? apartment?.name;
@@ -192,9 +285,9 @@ export function ApartmentDetailClient({
     () => summarizeApartmentPrices(transactions),
     [transactions],
   );
-  const maxTrendPrice = Math.max(
-    ...priceSummary.monthlyTrend.map((item) => item.averagePriceKrw),
-    0,
+  const trendLines = useMemo(
+    () => buildMonthlyPriceTrendLines(priceSummary.monthlyTrend),
+    [priceSummary.monthlyTrend],
   );
 
   return (
@@ -243,6 +336,88 @@ export function ApartmentDetailClient({
           </div>
           <StatusPill status={status} />
         </div>
+      </section>
+
+      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+              단지 기본정보
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              K-apt 공동주택 기본정보에서 세대수, 동수, 사용승인일, 난방, 주차
+              정보를 가져옵니다.
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              K-apt 코드: {apartment?.kapt_code ?? "미입력"}
+            </p>
+          </div>
+          {!mockApartment && session ? (
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={() => void handleBasicInfoSync()}
+                disabled={isBasicInfoSyncing || !apartment?.kapt_code || !isAdmin}
+                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+              >
+                {isBasicInfoSyncing ? "조회 중" : "K-apt 기본정보 불러오기"}
+              </button>
+              {!isAdmin ? (
+                <p className="max-w-64 text-xs leading-5 text-slate-500">
+                  K-apt 기본정보 동기화는 운영자 계정에서만 실행할 수 있습니다.
+                </p>
+              ) : !apartment?.kapt_code ? (
+                <p className="max-w-64 text-xs leading-5 text-slate-500">
+                  단지 수정에서 K-apt 코드를 입력하면 버튼이 활성화됩니다.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        {basicInfo ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <BasicInfoItem
+              label="세대수"
+              value={formatOptionalCount(basicInfo.household_count, "세대")}
+            />
+            <BasicInfoItem
+              label="동수"
+              value={formatOptionalCount(basicInfo.building_count, "동")}
+            />
+            <BasicInfoItem
+              label="사용승인일"
+              value={
+                basicInfo.approval_date ? formatDate(basicInfo.approval_date) : "-"
+              }
+            />
+            <BasicInfoItem
+              label="난방"
+              value={basicInfo.heating_type ?? "-"}
+            />
+            <BasicInfoItem
+              label="관리방식"
+              value={basicInfo.management_type ?? "-"}
+            />
+            <BasicInfoItem
+              label="분양형태"
+              value={basicInfo.sale_type ?? "-"}
+            />
+            <BasicInfoItem
+              label="주차"
+              value={formatOptionalCount(basicInfo.parking_count, "대")}
+            />
+            <BasicInfoItem
+              label="출처 갱신"
+              value={`${basicInfo.source_name} · ${formatDate(basicInfo.fetched_at)}`}
+            />
+          </div>
+        ) : (
+          <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+            아직 저장된 K-apt 기본정보가 없습니다. 운영자 계정에서 K-apt 코드를
+            확인한 뒤 기본정보를 불러오세요.
+          </p>
+        )}
       </section>
 
       <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5">
@@ -341,40 +516,25 @@ export function ApartmentDetailClient({
               ))}
             </div>
 
-            {priceSummary.monthlyTrend.length > 0 ? (
+            {trendLines.length > 0 ? (
               <div className="rounded-md border border-slate-200 bg-white p-4">
-                <h3 className="text-sm font-semibold text-slate-950">
-                  월별 평균 거래가 추이
-                </h3>
-                <div className="mt-4 grid gap-3">
-                  {priceSummary.monthlyTrend.slice(-12).map((point) => (
-                    <div
-                      key={`${point.month}-${point.areaBucket}`}
-                      className="grid grid-cols-[5rem_1fr_5rem] items-center gap-3 text-xs"
-                    >
-                      <span className="text-slate-500">
-                        {point.month} · {point.areaBucket}
-                      </span>
-                      <div className="h-2 rounded-full bg-slate-100">
-                        <div
-                          className="h-2 rounded-full bg-emerald-700"
-                          style={{
-                            width:
-                              maxTrendPrice > 0
-                                ? `${Math.max(
-                                    (point.averagePriceKrw / maxTrendPrice) * 100,
-                                    6,
-                                  )}%`
-                                : "0%",
-                          }}
-                        />
-                      </div>
-                      <span className="text-right font-semibold text-slate-700">
-                        {formatKrw(point.averagePriceKrw)}
-                      </span>
-                    </div>
-                  ))}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-950">
+                      월별 평균 실거래가 추이
+                    </h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      국토부 실거래가 기준입니다. 거래 건수가 적은 월은 평균가
+                      변동성이 클 수 있습니다.
+                    </p>
+                  </div>
+                  {trendLines.some((line) => line.isSparse) ? (
+                    <span className="w-fit rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">
+                      표본 적음
+                    </span>
+                  ) : null}
                 </div>
+                <PriceTrendLineChart lines={trendLines} />
               </div>
             ) : null}
 
@@ -457,5 +617,211 @@ export function ApartmentDetailClient({
         임장 메모 열기
       </Link>
     </div>
+  );
+}
+
+const PRICE_TREND_COLORS = ["#0f766e", "#2563eb", "#b45309", "#be123c"];
+
+function PriceTrendLineChart({
+  lines,
+}: Readonly<{ lines: MonthlyPriceTrendLine[] }>) {
+  const chartPoints = lines.flatMap((line) =>
+    line.points.map((point) => ({
+      ...point,
+      areaBucket: line.areaBucket,
+    })),
+  );
+
+  if (chartPoints.length === 0) {
+    return null;
+  }
+
+  const months = Array.from(new Set(chartPoints.map((point) => point.month))).sort();
+  const prices = chartPoints.map((point) => point.averagePriceKrw);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const width = 680;
+  const height = 260;
+  const paddingX = 56;
+  const paddingTop = 24;
+  const paddingBottom = 42;
+
+  const getX = (month: string) => {
+    if (months.length === 1) {
+      return width / 2;
+    }
+
+    return (
+      paddingX +
+      (months.indexOf(month) / (months.length - 1)) * (width - paddingX * 2)
+    );
+  };
+  const getY = (price: number) => {
+    if (minPrice === maxPrice) {
+      return (height - paddingBottom + paddingTop) / 2;
+    }
+
+    return (
+      height -
+      paddingBottom -
+      ((price - minPrice) / (maxPrice - minPrice)) *
+        (height - paddingTop - paddingBottom)
+    );
+  };
+  const visibleMonthLabels =
+    months.length <= 6
+      ? months
+      : months.filter(
+          (_month, index) => index === 0 || index === months.length - 1,
+        );
+  const yAxisPrices = Array.from(new Set([minPrice, maxPrice]));
+
+  return (
+    <div className="mt-4">
+      <div className="overflow-x-auto">
+        <svg
+          role="img"
+          aria-label="월별 평균 실거래가 line chart"
+          className="min-w-[620px]"
+          viewBox={`0 0 ${width} ${height}`}
+        >
+          <line
+            x1={paddingX}
+            x2={width - paddingX}
+            y1={height - paddingBottom}
+            y2={height - paddingBottom}
+            stroke="#cbd5e1"
+          />
+          <line
+            x1={paddingX}
+            x2={paddingX}
+            y1={paddingTop}
+            y2={height - paddingBottom}
+            stroke="#cbd5e1"
+          />
+          {yAxisPrices.map((price) => (
+            <g key={price}>
+              <line
+                x1={paddingX}
+                x2={width - paddingX}
+                y1={getY(price)}
+                y2={getY(price)}
+                stroke="#e2e8f0"
+              />
+              <text
+                x={paddingX - 10}
+                y={getY(price) + 4}
+                fill="#64748b"
+                fontSize="11"
+                textAnchor="end"
+              >
+                {formatKrw(price)}
+              </text>
+            </g>
+          ))}
+          {visibleMonthLabels.map((month) => (
+            <text
+              key={month}
+              x={getX(month)}
+              y={height - 14}
+              fill="#64748b"
+              fontSize="11"
+              textAnchor="middle"
+            >
+              {month}
+            </text>
+          ))}
+          {lines.map((line, lineIndex) => {
+            const color =
+              PRICE_TREND_COLORS[lineIndex % PRICE_TREND_COLORS.length];
+            const path = line.points
+              .map(
+                (point, pointIndex) =>
+                  `${pointIndex === 0 ? "M" : "L"} ${getX(point.month)} ${getY(
+                    point.averagePriceKrw,
+                  )}`,
+              )
+              .join(" ");
+
+            return (
+              <g key={line.areaBucket}>
+                {line.points.length > 1 ? (
+                  <path
+                    d={path}
+                    fill="none"
+                    stroke={color}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="3"
+                  />
+                ) : null}
+                {line.points.map((point) => (
+                  <circle
+                    key={`${line.areaBucket}-${point.month}`}
+                    cx={getX(point.month)}
+                    cy={getY(point.averagePriceKrw)}
+                    fill="#ffffff"
+                    r="4"
+                    stroke={color}
+                    strokeWidth="3"
+                  >
+                    <title>
+                      {point.month} {line.areaBucket}㎡ 평균{" "}
+                      {formatKrw(point.averagePriceKrw)} ({point.transactionCount}
+                      건)
+                    </title>
+                  </circle>
+                ))}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+        {lines.map((line, index) => (
+          <span
+            key={line.areaBucket}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-2 py-1"
+          >
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{
+                backgroundColor:
+                  PRICE_TREND_COLORS[index % PRICE_TREND_COLORS.length],
+              }}
+            />
+            {line.areaBucket}㎡대 · {line.totalTransactionCount}건
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function readJsonResult<T>(response: Response): Promise<T> {
+  try {
+    return (await response.json()) as T;
+  } catch {
+    return {} as T;
+  }
+}
+
+function formatOptionalCount(value: number | null, suffix: string) {
+  return value !== null ? `${value.toLocaleString("ko-KR")}${suffix}` : "-";
+}
+
+function isMissingTableError(error: { code?: string }) {
+  return error.code === "42P01" || error.code === "PGRST205";
+}
+
+function BasicInfoItem({
+  label,
+  value,
+}: Readonly<{ label: string; value: string }>) {
+  return (
+    <dl className="rounded-md border border-slate-200 bg-slate-50 p-4">
+      <dt className="text-xs font-semibold text-slate-500">{label}</dt>
+      <dd className="mt-2 text-sm font-semibold text-slate-950">{value}</dd>
+    </dl>
   );
 }

@@ -60,6 +60,32 @@ export type ApartmentTransactionRow = {
   updated_at: string;
 };
 
+export type ApartmentBasicInfoRow = {
+  id: string;
+  user_id: string;
+  apartment_id: string;
+  raw_api_response_id: string | null;
+  source_name: string;
+  source_ref: string | null;
+  kapt_code: string | null;
+  kapt_name_from_source: string | null;
+  legal_address_from_source: string | null;
+  road_address_from_source: string | null;
+  household_count: number | null;
+  building_count: number | null;
+  approval_date: string | null;
+  heating_type: string | null;
+  management_type: string | null;
+  sale_type: string | null;
+  parking_count: number | null;
+  elevator_count: number | null;
+  gross_floor_area_m2: number | null;
+  confidence_level: "high" | "medium" | "low" | "manual" | "unknown";
+  fetched_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ApartmentAliasRow = {
   id: string;
   user_id: string;

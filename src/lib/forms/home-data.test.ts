@@ -56,6 +56,7 @@ describe("validateApartmentInput", () => {
         name: " 래미안에스티움 ",
         status: "candidate",
         lawdCd: " 11560 ",
+        kaptCode: " A15876402 ",
       }),
     ).toEqual({
       ok: true,
@@ -65,6 +66,7 @@ describe("validateApartmentInput", () => {
         address: null,
         road_address: null,
         lawd_cd: "11560",
+        kapt_code: "A15876402",
         status: "candidate",
         memo: null,
         kb_url: null,

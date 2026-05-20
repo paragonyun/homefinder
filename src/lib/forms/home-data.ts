@@ -105,6 +105,7 @@ export type ApartmentInput = {
   address?: unknown;
   roadAddress?: unknown;
   lawdCd?: unknown;
+  kaptCode?: unknown;
   status?: unknown;
   memo?: unknown;
   kbUrl?: unknown;
@@ -117,6 +118,7 @@ export type ApartmentPayload = {
   address: string | null;
   road_address: string | null;
   lawd_cd: string | null;
+  kapt_code: string | null;
   status: ApartmentStatus;
   memo: string | null;
   kb_url: string | null;
@@ -152,6 +154,7 @@ export function validateApartmentInput(
       address: cleanText(input.address),
       road_address: cleanText(input.roadAddress),
       lawd_cd: lawdCd,
+      kapt_code: cleanText(input.kaptCode),
       status: status as ApartmentStatus,
       memo: cleanText(input.memo),
       kb_url: cleanText(input.kbUrl),

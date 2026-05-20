@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { summarizeApartmentPrices } from "./price-summary";
+import {
+  buildMonthlyPriceTrendLines,
+  summarizeApartmentPrices,
+} from "./price-summary";
 
 describe("summarizeApartmentPrices", () => {
   it("groups active transactions by area bucket with latest and aggregate prices", () => {
@@ -90,6 +93,102 @@ describe("summarizeApartmentPrices", () => {
         areaBucket: "84",
         averagePriceKrw: 1_350_000_000,
         transactionCount: 1,
+      },
+    ]);
+  });
+
+  it("builds recent monthly trend lines without dropping area buckets", () => {
+    const lines = buildMonthlyPriceTrendLines(
+      [
+        {
+          month: "2025-01",
+          areaBucket: "59",
+          averagePriceKrw: 900_000_000,
+          transactionCount: 1,
+        },
+        {
+          month: "2025-01",
+          areaBucket: "84",
+          averagePriceKrw: 1_200_000_000,
+          transactionCount: 2,
+        },
+        {
+          month: "2025-02",
+          areaBucket: "59",
+          averagePriceKrw: 930_000_000,
+          transactionCount: 1,
+        },
+        {
+          month: "2025-02",
+          areaBucket: "84",
+          averagePriceKrw: 1_250_000_000,
+          transactionCount: 1,
+        },
+        {
+          month: "2025-03",
+          areaBucket: "84",
+          averagePriceKrw: 1_280_000_000,
+          transactionCount: 1,
+        },
+      ],
+      2,
+    );
+
+    expect(lines).toEqual([
+      {
+        areaBucket: "59",
+        points: [
+          {
+            month: "2025-02",
+            averagePriceKrw: 930_000_000,
+            transactionCount: 1,
+          },
+        ],
+        totalTransactionCount: 1,
+        isSparse: true,
+      },
+      {
+        areaBucket: "84",
+        points: [
+          {
+            month: "2025-02",
+            averagePriceKrw: 1_250_000_000,
+            transactionCount: 1,
+          },
+          {
+            month: "2025-03",
+            averagePriceKrw: 1_280_000_000,
+            transactionCount: 1,
+          },
+        ],
+        totalTransactionCount: 2,
+        isSparse: true,
+      },
+    ]);
+  });
+
+  it("keeps a single-month single-price trend line renderable", () => {
+    expect(
+      buildMonthlyPriceTrendLines([
+        {
+          month: "2025-03",
+          areaBucket: "84",
+          averagePriceKrw: 1_250_000_000,
+          transactionCount: 1,
+        },
+      ]),
+    ).toEqual([
+      {
+        areaBucket: "84",
+        points: [
+          {
+            month: "2025-03",
+            averagePriceKrw: 1_250_000_000,
+            transactionCount: 1,
+          },
+        ],
+        totalTransactionCount: 1,
+        isSparse: true,
       },
     ]);
   });

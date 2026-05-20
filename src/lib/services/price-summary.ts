@@ -26,6 +26,17 @@ export type MonthlyPriceTrend = {
   transactionCount: number;
 };
 
+export type MonthlyPriceTrendLine = {
+  areaBucket: string;
+  points: Array<{
+    month: string;
+    averagePriceKrw: number;
+    transactionCount: number;
+  }>;
+  totalTransactionCount: number;
+  isSparse: boolean;
+};
+
 type NormalizedTransaction = {
   dealDate: string;
   month: string;
@@ -46,6 +57,46 @@ export function summarizeApartmentPrices(
     areaSummaries: summarizeByArea(activeTransactions),
     monthlyTrend: summarizeByMonth(activeTransactions),
   };
+}
+
+export function buildMonthlyPriceTrendLines(
+  monthlyTrend: MonthlyPriceTrend[],
+  maxMonths = 12,
+): MonthlyPriceTrendLine[] {
+  const recentMonths = Array.from(
+    new Set(monthlyTrend.map((point) => point.month)),
+  )
+    .sort()
+    .slice(-maxMonths);
+  const recentMonthSet = new Set(recentMonths);
+
+  return Array.from(
+    groupBy(
+      monthlyTrend.filter((point) => recentMonthSet.has(point.month)),
+      (point) => point.areaBucket,
+    ),
+  )
+    .map(([areaBucket, points]) => {
+      const sortedPoints = [...points]
+        .sort((left, right) => left.month.localeCompare(right.month))
+        .map((point) => ({
+          month: point.month,
+          averagePriceKrw: point.averagePriceKrw,
+          transactionCount: point.transactionCount,
+        }));
+      const totalTransactionCount = sortedPoints.reduce(
+        (sum, point) => sum + point.transactionCount,
+        0,
+      );
+
+      return {
+        areaBucket,
+        points: sortedPoints,
+        totalTransactionCount,
+        isSparse: sortedPoints.length < 3 || totalTransactionCount < 4,
+      } satisfies MonthlyPriceTrendLine;
+    })
+    .sort((left, right) => compareAreaBucket(left.areaBucket, right.areaBucket));
 }
 
 function normalizeTransaction(

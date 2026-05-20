@@ -42,6 +42,8 @@
 - [x] XML 응답 샘플 기반 파서 테스트
 - [x] `raw_api_responses` 저장 로직
 - [x] 단지명 정확일치 및 안전한 포함일치 매칭 로직
+- [x] 국토부 원천 단지명 alias 저장 구조
+- [x] 매칭 실패 시 원천 단지명 후보 표시
 - [x] `apartment_transactions` migration 작성
 - [x] 실거래가 동기화 route 작성
 - [x] 단지 상세 거래 테이블 표시

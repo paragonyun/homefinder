@@ -296,6 +296,35 @@ export function normalizeApartmentNameForMolit(value: string | null | undefined)
   );
 }
 
+export function getMolitApartmentNameVariants(
+  value: string | null | undefined,
+) {
+  const rawText = cleanText(value);
+
+  if (!rawText) {
+    return [];
+  }
+
+  const variants = new Set<string>();
+  const normalized = normalizeApartmentNameForMolit(rawText);
+
+  addNameVariant(variants, normalized);
+
+  const withoutParenthetical = rawText
+    .replace(/\([^)]*\)/g, "")
+    .replace(/（[^）]*）/g, "");
+
+  addNameVariant(variants, normalizeApartmentNameForMolit(withoutParenthetical));
+
+  for (const variant of Array.from(variants)) {
+    for (const suffix of ["아파트", "apt", "타운"]) {
+      addNameVariant(variants, stripNameSuffix(variant, suffix));
+    }
+  }
+
+  return Array.from(variants);
+}
+
 export function isMolitApartmentNameMatch(
   sourceName: string | null | undefined,
   targetNames: string[],
@@ -309,23 +338,56 @@ export function isMolitApartmentNameMatch(
   return targetNames.some((targetName) => {
     const target = normalizeApartmentNameForMolit(targetName);
 
-    if (!target) {
-      return false;
-    }
+    return target ? isNameVariantMatch(source, target) : false;
+  });
+}
 
-    if (source === target) {
-      return true;
-    }
+export function isMolitApartmentNameCandidate(
+  sourceName: string | null | undefined,
+  targetNames: string[],
+) {
+  const sourceVariants = getMolitApartmentNameVariants(sourceName);
 
-    return (
-      (isSpecificApartmentName(source) && target.includes(source)) ||
-      (isSpecificApartmentName(target) && source.includes(target))
+  if (sourceVariants.length === 0) {
+    return false;
+  }
+
+  return targetNames.some((targetName) => {
+    const targetVariants = getMolitApartmentNameVariants(targetName);
+
+    return sourceVariants.some((source) =>
+      targetVariants.some((target) => isNameVariantMatch(source, target)),
     );
   });
 }
 
+function isNameVariantMatch(source: string, target: string) {
+  if (source === target) {
+    return true;
+  }
+
+  return (
+    (isSpecificApartmentName(source) && target.includes(source)) ||
+    (isSpecificApartmentName(target) && source.includes(target))
+  );
+}
+
 function isSpecificApartmentName(value: string) {
   return value.length >= 4 || (value.length >= 3 && /\d/.test(value));
+}
+
+function addNameVariant(variants: Set<string>, value: string) {
+  if (isSpecificApartmentName(value)) {
+    variants.add(value);
+  }
+}
+
+function stripNameSuffix(value: string, suffix: string) {
+  if (!value.endsWith(suffix)) {
+    return value;
+  }
+
+  return value.slice(0, -suffix.length);
 }
 
 function normalizeMolitTradeRecord(record: MolitXmlRecord): MolitApartmentTrade {

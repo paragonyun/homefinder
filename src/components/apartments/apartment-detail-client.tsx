@@ -39,6 +39,9 @@ export function ApartmentDetailClient({
   const [session, setSession] = useState<Session | null>(null);
   const [apartment, setApartment] = useState<ApartmentRowData | null>(null);
   const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
+  const [candidateNames, setCandidateNames] = useState<
+    Array<{ name: string; count: number }>
+  >([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
@@ -159,6 +162,7 @@ export function ApartmentDetailClient({
       totalCount?: number;
       dealYmd?: string;
       monthsChecked?: number;
+      candidateNames?: Array<{ name: string; count: number }>;
     };
 
     if (!response.ok) {
@@ -168,6 +172,7 @@ export function ApartmentDetailClient({
       const monthsChecked = result.monthsChecked ?? 0;
       const matchedCount = result.matchedCount ?? 0;
 
+      setCandidateNames(result.candidateNames ?? []);
       setMessage(
         matchedCount > 0 && result.dealYmd
           ? `최근 ${monthsChecked}개월을 확인했고, ${result.dealYmd} 실거래가 ${matchedCount}건을 반영했습니다.`
@@ -197,6 +202,23 @@ export function ApartmentDetailClient({
         <p className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
           {message}
         </p>
+      ) : null}
+
+      {candidateNames.length > 0 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">국토부 원천명 후보</p>
+          <p className="mt-1 leading-6">
+            아래 이름을 단지 수정 화면의 국토부 원천 단지명 alias에 추가한 뒤 다시
+            동기화하세요.
+          </p>
+          <ul className="mt-2 grid gap-1">
+            {candidateNames.map((candidate) => (
+              <li key={candidate.name}>
+                {candidate.name} ({candidate.count}건)
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-5">

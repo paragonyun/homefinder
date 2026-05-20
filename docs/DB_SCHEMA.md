@@ -80,7 +80,10 @@ Supabase Auth 사용자 보조 프로필입니다.
 
 ### apartment_aliases
 
+실제 migration: `supabase/migrations/20260520000100_apartment_aliases.sql`
+
 - `id uuid primary key`
+- `user_id uuid references users(id)`
 - `apartment_id uuid references apartments(id)`
 - `alias text not null`
 - `source text`

@@ -15,6 +15,7 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 import type {
+  ApartmentAliasRow,
   ApartmentRowData,
   NeighborhoodRow,
 } from "@/lib/supabase/table-types";
@@ -29,6 +30,7 @@ type ApartmentFormState = {
   lawdCd: string;
   status: string;
   memo: string;
+  molitAliases: string;
   kbUrl: string;
   naverLandUrl: string;
 };
@@ -42,13 +44,26 @@ const emptyForm: ApartmentFormState = {
   lawdCd: "",
   status: "candidate",
   memo: "",
+  molitAliases: "",
   kbUrl: "",
   naverLandUrl: "",
 };
 
+function parseAliasInput(value: string) {
+  return Array.from(
+    new Set(
+      value
+        .split(/[\n,]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
 export function ApartmentsClient() {
   const [session, setSession] = useState<Session | null>(null);
   const [apartments, setApartments] = useState<ApartmentRowData[]>([]);
+  const [aliases, setAliases] = useState<ApartmentAliasRow[]>([]);
   const [neighborhoods, setNeighborhoods] = useState<NeighborhoodRow[]>([]);
   const [form, setForm] = useState<ApartmentFormState>(emptyForm);
   const [isLoading, setIsLoading] = useState(false);
@@ -63,13 +78,20 @@ export function ApartmentsClient() {
 
     setIsLoading(true);
 
-    const [{ data: apartmentRows, error: apartmentError }, { data: neighborhoodRows }] =
-      await Promise.all([
+    const [
+      { data: apartmentRows, error: apartmentError },
+      { data: neighborhoodRows },
+      { data: aliasRows, error: aliasError },
+    ] = await Promise.all([
         supabase
           .from("apartments")
           .select("*")
           .order("updated_at", { ascending: false }),
         supabase.from("neighborhoods").select("*").order("name"),
+        supabase
+          .from("apartment_aliases")
+          .select("*")
+          .order("created_at", { ascending: true }),
       ]);
 
     if (apartmentError) {
@@ -77,6 +99,13 @@ export function ApartmentsClient() {
     } else {
       setApartments((apartmentRows ?? []) as ApartmentRowData[]);
       setNeighborhoods((neighborhoodRows ?? []) as NeighborhoodRow[]);
+      setAliases(
+        aliasError?.code === "42P01" ? [] : ((aliasRows ?? []) as ApartmentAliasRow[]),
+      );
+
+      if (aliasError && aliasError.code !== "42P01") {
+        setMessage(aliasError.message);
+      }
     }
 
     setIsLoading(false);
@@ -110,6 +139,7 @@ export function ApartmentsClient() {
         void loadData();
       } else {
         setApartments([]);
+        setAliases([]);
         setNeighborhoods([]);
       }
     });
@@ -161,20 +191,65 @@ export function ApartmentsClient() {
     setMessage(null);
 
     const query = form.id
-      ? supabase.from("apartments").update(validated.value).eq("id", form.id)
-      : supabase.from("apartments").insert(validated.value);
+      ? supabase
+          .from("apartments")
+          .update(validated.value)
+          .eq("id", form.id)
+          .select("id")
+          .single()
+      : supabase.from("apartments").insert(validated.value).select("id").single();
 
-    const { error } = await query;
+    const { data: savedApartment, error } = await query;
 
     if (error) {
       setMessage(error.message);
     } else {
+      const aliasError = await saveMolitAliases(savedApartment.id);
+
+      if (aliasError) {
+        setMessage(aliasError);
+        setIsLoading(false);
+        return;
+      }
+
       setForm(emptyForm);
       await loadData();
       setMessage(form.id ? "단지를 수정했습니다." : "단지를 추가했습니다.");
     }
 
     setIsLoading(false);
+  }
+
+  async function saveMolitAliases(apartmentId: string) {
+    if (!supabase || !session) {
+      return null;
+    }
+
+    const nextAliases = parseAliasInput(form.molitAliases);
+    const { error: deleteError } = await supabase
+      .from("apartment_aliases")
+      .delete()
+      .eq("apartment_id", apartmentId)
+      .eq("source", "molit");
+
+    if (deleteError) {
+      return deleteError.message;
+    }
+
+    if (nextAliases.length === 0) {
+      return null;
+    }
+
+    const { error: insertError } = await supabase.from("apartment_aliases").insert(
+      nextAliases.map((alias) => ({
+        apartment_id: apartmentId,
+        user_id: session.user.id,
+        alias,
+        source: "molit",
+      })),
+    );
+
+    return insertError?.message ?? null;
   }
 
   async function handleDelete(id: string) {
@@ -205,6 +280,11 @@ export function ApartmentsClient() {
       lawdCd: apartment.lawd_cd ?? "",
       status: apartment.status,
       memo: apartment.memo ?? "",
+      molitAliases: aliases
+        .filter((alias) => alias.apartment_id === apartment.id)
+        .filter((alias) => !alias.source || alias.source === "molit")
+        .map((alias) => alias.alias)
+        .join("\n"),
       kbUrl: apartment.kb_url ?? "",
       naverLandUrl: apartment.naver_land_url ?? "",
     });
@@ -344,6 +424,24 @@ export function ApartmentsClient() {
                 className="min-h-24 rounded-md border border-slate-300 px-3 py-2"
                 placeholder="확인할 점, 임장 포인트, 판단 메모"
               />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              국토부 원천 단지명 alias
+              <textarea
+                value={form.molitAliases}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    molitAliases: event.target.value,
+                  }))
+                }
+                className="min-h-20 rounded-md border border-slate-300 px-3 py-2"
+                placeholder={"예: 관악드림(동아)\n관악드림(삼성)"}
+              />
+              <span className="text-xs leading-5 text-slate-500">
+                국토부 실거래가 원천명과 등록 단지명이 다를 때만 입력합니다. 여러
+                개는 줄바꿈 또는 쉼표로 구분합니다.
+              </span>
             </label>
           </div>
           <div className="flex flex-wrap gap-2">

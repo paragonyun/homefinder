@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
   fetchMolitApartmentTradePages,
+  isMolitApartmentNameCandidate,
   isMolitApartmentNameMatch,
   MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT,
   normalizeApartmentNameForMolit,
@@ -79,7 +80,7 @@ export async function POST(
 
   const { data: apartment, error: apartmentError } = await supabase
     .from("apartments")
-    .select("id,user_id,name,display_name,lawd_cd")
+    .select("id,user_id,name,display_name,address,road_address,lawd_cd")
     .eq("id", apartmentId)
     .maybeSingle();
 
@@ -111,13 +112,34 @@ export async function POST(
   const sourceNames = [
     normalizeApartmentNameForMolit(apartment.name),
     normalizeApartmentNameForMolit(apartment.display_name),
-  ].filter(Boolean);
+  ];
+  const { data: aliasRows, error: aliasError } = await supabase
+    .from("apartment_aliases")
+    .select("alias,source")
+    .eq("apartment_id", apartmentId)
+    .or("source.is.null,source.eq.molit");
+
+  if (aliasError && aliasError.code !== "42P01") {
+    return NextResponse.json({ error: aliasError.message }, { status: 500 });
+  }
+
+  sourceNames.push(
+    ...((aliasRows ?? []) as Array<{ alias: string | null }>)
+      .map((alias) => normalizeApartmentNameForMolit(alias.alias))
+      .filter(Boolean),
+  );
+  const uniqueSourceNames = Array.from(new Set(sourceNames.filter(Boolean)));
+  const addressTokens = getAddressNumberTokens([
+    apartment.address,
+    apartment.road_address,
+  ]);
   const attempts: Array<{
     dealYmd: string;
     totalCount: number;
     matchedCount: number;
     pageCount: number;
   }> = [];
+  const candidateNames = new Map<string, number>();
   let selectedDealYmd: string | null = null;
   let selectedPages: MolitApartmentTradePage[] = [];
   let transactions: MolitApartmentTrade[] = [];
@@ -131,9 +153,19 @@ export async function POST(
       });
       const matchedTransactions = getMatchingTransactions(
         pages,
-        sourceNames,
+        uniqueSourceNames,
         legalDongCd,
       );
+
+      if (matchedTransactions.length === 0) {
+        collectCandidateNames({
+          pages,
+          sourceNames: uniqueSourceNames,
+          legalDongCd,
+          addressTokens,
+          candidateNames,
+        });
+      }
 
       attempts.push({
         dealYmd,
@@ -174,7 +206,7 @@ export async function POST(
           legalDongCd,
           mode: dealYmds.mode,
           dealYmds: dealYmds.dealYmds,
-          sourceNames,
+          sourceNames: uniqueSourceNames,
         }),
       ),
       request_params: {
@@ -184,13 +216,14 @@ export async function POST(
         legalDongCd,
         mode: dealYmds.mode,
         dealYmds: dealYmds.dealYmds,
-        sourceNames,
+        sourceNames: uniqueSourceNames,
         attempts,
       },
       response_body: {
         totalCount: attempts.reduce((sum, attempt) => sum + attempt.totalCount, 0),
         matchedCount: transactions.length,
         matchedDealYmd: selectedDealYmd,
+        candidateNames: toCandidateNameList(candidateNames),
         attempts,
         pages: selectedPages.map((page) => ({
           dealYmd: selectedDealYmd,
@@ -233,6 +266,7 @@ export async function POST(
     dealYmd: selectedDealYmd,
     monthsChecked: attempts.length,
     mode: dealYmds.mode,
+    candidateNames: toCandidateNameList(candidateNames),
   });
 }
 
@@ -254,6 +288,56 @@ function matchesLegalDong(
   legalDongCd: string | null,
 ) {
   return !legalDongCd || !transaction.umdCd || transaction.umdCd === legalDongCd;
+}
+
+function collectCandidateNames({
+  pages,
+  sourceNames,
+  legalDongCd,
+  addressTokens,
+  candidateNames,
+}: {
+  pages: MolitApartmentTradePage[];
+  sourceNames: string[];
+  legalDongCd: string | null;
+  addressTokens: string[];
+  candidateNames: Map<string, number>;
+}) {
+  for (const transaction of pages.flatMap((page) => page.transactions)) {
+    const sourceName = transaction.apartmentNameFromSource;
+
+    if (!sourceName || !matchesLegalDong(transaction, legalDongCd)) {
+      continue;
+    }
+
+    const hasAddressMatch =
+      addressTokens.length > 0 &&
+      addressTokens.some((token) => transaction.addressFromSource?.includes(token));
+    const hasNameCandidate = isMolitApartmentNameCandidate(sourceName, sourceNames);
+
+    if (!hasAddressMatch && !hasNameCandidate) {
+      continue;
+    }
+
+    candidateNames.set(sourceName, (candidateNames.get(sourceName) ?? 0) + 1);
+  }
+}
+
+function toCandidateNameList(candidateNames: Map<string, number>) {
+  return Array.from(candidateNames.entries())
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, 12)
+    .map(([name, count]) => ({ name, count }));
+}
+
+function getAddressNumberTokens(values: Array<string | null>) {
+  return Array.from(
+    new Set(
+      values
+        .flatMap((value) => value?.match(/\d{1,4}(?:-\d{1,4})?/g) ?? [])
+        .filter((value) => value.length >= 2),
+    ),
+  );
 }
 
 function toTransactionPayload(

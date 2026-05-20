@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildMolitApartmentTradeUrl,
   fetchMolitApartmentTradeXml,
+  getMolitApartmentNameVariants,
   getRecentDealYmds,
+  isMolitApartmentNameCandidate,
   isMolitApartmentNameMatch,
   parseMolitApartmentTradeXml,
   resolveMolitDealYmds,
@@ -199,10 +201,40 @@ describe("isMolitApartmentNameMatch", () => {
     ).toBe(true);
   });
 
-  it("keeps very short names from matching broad text accidentally", () => {
-    expect(isMolitApartmentNameMatch("동아", ["염창동 동아 3차 아파트"])).toBe(
+  it("does not automatically match names split by construction company suffixes", () => {
+    expect(isMolitApartmentNameMatch("관악드림(동아)", ["관악드림타운"])).toBe(
       false,
     );
+  });
+
+  it("matches construction company suffixes when the source name is a manual alias", () => {
+    expect(isMolitApartmentNameMatch("관악드림(동아)", ["관악드림(동아)"])).toBe(
+      true,
+    );
+  });
+});
+
+describe("isMolitApartmentNameCandidate", () => {
+  it("finds possible names split by construction company suffixes", () => {
+    expect(isMolitApartmentNameCandidate("관악드림(동아)", ["관악드림타운"]))
+      .toBe(true);
+
+    expect(isMolitApartmentNameCandidate("관악드림(삼성)", ["봉천동 관악드림타운"]))
+      .toBe(true);
+  });
+
+  it("keeps very short names out of candidate matches", () => {
+    expect(isMolitApartmentNameCandidate("동아", ["염창동 동아 3차 아파트"])).toBe(
+      false,
+    );
+  });
+});
+
+describe("getMolitApartmentNameVariants", () => {
+  it("returns practical matching variants without broad short names", () => {
+    expect(getMolitApartmentNameVariants("관악드림(동아)")).toContain("관악드림");
+    expect(getMolitApartmentNameVariants("관악드림타운")).toContain("관악드림");
+    expect(getMolitApartmentNameVariants("드림타운")).not.toContain("드림");
   });
 });
 

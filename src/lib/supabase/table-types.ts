@@ -60,6 +60,15 @@ export type ApartmentTransactionRow = {
   updated_at: string;
 };
 
+export type ApartmentAliasRow = {
+  id: string;
+  user_id: string;
+  apartment_id: string;
+  alias: string;
+  source: string | null;
+  created_at: string;
+};
+
 export type FieldNoteRow = {
   id: string;
   user_id: string;

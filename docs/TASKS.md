@@ -59,8 +59,11 @@
 - [x] K-apt 기본정보 동기화 route 작성
 - [x] 단지 상세 기본정보 표시
 - [x] 비교 화면 K-apt 기본정보 표시
-- [ ] Supabase에 K-apt 기본정보 migration 실제 적용
-- [ ] Vercel에 `KAPT_API_KEY` 등록
+- [x] K-apt 단지 목록 parser 테스트
+- [x] K-apt 코드 자동 탐색 route 작성
+- [x] 단지 상세 아파트 종합 정보 조회 버튼 추가
+- [x] Supabase에 K-apt 기본정보 migration 실제 적용
+- [x] Vercel에 `KAPT_API_KEY` 등록
 - [ ] 실제 K-apt API 응답으로 운영 환경 동기화 검증
 
 ## 운영 적용 메모
@@ -73,8 +76,8 @@
 - [ ] Supabase에 `20260519000100_admin_only_core_mutations.sql` 적용 확인
 - [ ] Supabase에 `20260519000200_apartment_transactions.sql` 적용 확인
 - [ ] Supabase에 `20260520000100_apartment_aliases.sql` 적용 확인
-- [ ] Supabase에 `20260520000200_apartment_basic_info.sql` 적용
-- [ ] Vercel에 `KAPT_API_KEY` 등록
+- [x] Supabase에 `20260520000200_apartment_basic_info.sql` 적용
+- [x] Vercel에 `KAPT_API_KEY` 등록
 - [ ] Supabase 운영자 계정 `app_metadata.role = admin` 설정 확인
 
 ## 금지/주의

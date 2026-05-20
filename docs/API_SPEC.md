@@ -64,6 +64,16 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 - 저장: 세대수, 동수, 사용승인일, 난방방식, 관리방식, 분양형태, 주차대수, 승강기대수, 건축물대장상 연면적, 원천 단지명/주소를 저장합니다.
 - 실패: `KAPT_API_KEY` 없음, K-apt 코드 없음, 권한 없음, 원천 데이터 없음, 공공데이터포털 에러 응답을 명시적으로 반환합니다.
 
+현재 구현된 K-apt 코드 탐색 route:
+
+- `POST /api/apartments/:id/kapt-code/resolve`
+- 인증: `Authorization: Bearer <Supabase access token>`
+- 권한: `app_metadata.role = admin`
+- 요청 body: 기본값은 `{}`. 후보를 사용자가 선택한 경우 `{ "kaptCode": "A..." }`도 허용합니다.
+- 동작: K-apt 단지 목록을 조회하고, `lawd_cd`, 단지명, alias, 저장된 국토부 원천명/주소 단서를 사용해 후보를 점수화합니다. 후보가 명확하면 `apartments.kapt_code`를 저장하고, 애매하면 상위 후보를 반환합니다.
+- 반환: `{ applied, selected, candidates, reason }`
+- 실패: `KAPT_API_KEY` 없음, 법정동코드 없음, 권한 없음, 공공데이터포털 에러 응답을 명시적으로 반환합니다.
+
 ## Transactions
 
 - `GET /api/apartments/:id/transactions`

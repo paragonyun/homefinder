@@ -28,6 +28,41 @@ type ApartmentDetailClientProps = {
   apartmentId: string;
 };
 
+type TransactionSyncResult = {
+  error?: string;
+  matchedCount?: number;
+  totalCount?: number;
+  dealYmd?: string;
+  monthsChecked?: number;
+  candidateNames?: Array<{ name: string; count: number }>;
+};
+
+type BasicInfoSyncResult = {
+  error?: string;
+  kaptName?: string | null;
+  fetchedAt?: string;
+};
+
+type KaptCodeCandidate = {
+  kaptCode: string;
+  kaptName: string;
+  bjdCode: string | null;
+  sido: string | null;
+  sigungu: string | null;
+  eupmyeondong: string | null;
+  ri: string | null;
+  score: number;
+  reasons: string[];
+};
+
+type KaptCodeResolveResult = {
+  error?: string;
+  applied?: boolean;
+  selected?: KaptCodeCandidate | null;
+  candidates?: KaptCodeCandidate[];
+  reason?: string;
+};
+
 const sections = [
   ["건축정보", "건축물대장 후보 데이터가 확보되면 용적률, 건폐율, 대지면적을 표시합니다."],
   ["학군", "NEIS 학교기본정보와 거리 계산을 MVP 2에서 연결합니다."],
@@ -48,8 +83,12 @@ export function ApartmentDetailClient({
   const [candidateNames, setCandidateNames] = useState<
     Array<{ name: string; count: number }>
   >([]);
+  const [kaptCodeCandidates, setKaptCodeCandidates] = useState<
+    KaptCodeCandidate[]
+  >([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBasicInfoSyncing, setIsBasicInfoSyncing] = useState(false);
+  const [isComprehensiveSyncing, setIsComprehensiveSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
   const isAdmin = isAdminRole(getRoleFromAppMetadata(session?.user.app_metadata));
@@ -171,44 +210,12 @@ export function ApartmentDetailClient({
     setCandidateNames([]);
 
     try {
-      const {
-        data: { session: currentSession },
-      } = await supabase.auth.getSession();
+      const accessToken = await getAccessToken();
+      const result = await syncTransactions(accessToken);
 
-      const response = await fetch(
-        `/api/apartments/${apartmentId}/transactions/sync`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${currentSession?.access_token ?? ""}`,
-          },
-          body: JSON.stringify({}),
-        },
-      );
-      const result = await readJsonResult<{
-        error?: string;
-        matchedCount?: number;
-        totalCount?: number;
-        dealYmd?: string;
-        monthsChecked?: number;
-        candidateNames?: Array<{ name: string; count: number }>;
-      }>(response);
-
-      if (!response.ok) {
-        setMessage(result.error ?? "실거래가 동기화에 실패했습니다.");
-      } else {
-        await loadApartment();
-        const monthsChecked = result.monthsChecked ?? 0;
-        const matchedCount = result.matchedCount ?? 0;
-
-        setCandidateNames(result.candidateNames ?? []);
-        setMessage(
-          matchedCount > 0 && result.dealYmd
-            ? `최근 ${monthsChecked}개월을 확인했고, ${result.dealYmd} 실거래가 ${matchedCount}건을 반영했습니다.`
-            : `최근 ${monthsChecked}개월에서 단지명 일치 거래를 찾지 못했습니다.`,
-        );
-      }
+      await loadApartment();
+      setCandidateNames(result.candidateNames ?? []);
+      setMessage(formatTransactionSyncMessage(result));
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -235,37 +242,11 @@ export function ApartmentDetailClient({
     setMessage(null);
 
     try {
-      const {
-        data: { session: currentSession },
-      } = await supabase.auth.getSession();
+      const accessToken = await getAccessToken();
+      const result = await syncBasicInfo(accessToken);
 
-      const response = await fetch(
-        `/api/apartments/${apartmentId}/basic-info/sync`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${currentSession?.access_token ?? ""}`,
-          },
-          body: JSON.stringify({}),
-        },
-      );
-      const result = await readJsonResult<{
-        error?: string;
-        kaptName?: string | null;
-        fetchedAt?: string;
-      }>(response);
-
-      if (!response.ok) {
-        setMessage(result.error ?? "K-apt 기본정보 동기화에 실패했습니다.");
-      } else {
-        await loadApartment();
-        setMessage(
-          result.kaptName
-            ? `${result.kaptName} K-apt 기본정보를 반영했습니다.`
-            : "K-apt 기본정보를 반영했습니다.",
-        );
-      }
+      await loadApartment();
+      setMessage(formatBasicInfoSyncMessage(result));
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -275,6 +256,160 @@ export function ApartmentDetailClient({
     } finally {
       setIsBasicInfoSyncing(false);
     }
+  }
+
+  async function handleComprehensiveSync() {
+    if (!supabase || !session || !apartment || !isAdmin) {
+      setMessage("종합 정보 조회는 운영자 계정만 실행할 수 있습니다.");
+      return;
+    }
+
+    if (!apartment.lawd_cd) {
+      setMessage("아파트 종합 정보 조회를 위해 법정동코드를 먼저 입력하세요.");
+      return;
+    }
+
+    setIsComprehensiveSyncing(true);
+    setMessage(null);
+    setCandidateNames([]);
+    setKaptCodeCandidates([]);
+
+    try {
+      const accessToken = await getAccessToken();
+      const messages: string[] = [];
+
+      try {
+        const transactionResult = await syncTransactions(accessToken);
+        setCandidateNames(transactionResult.candidateNames ?? []);
+        messages.push(`실거래가: ${formatTransactionSyncMessage(transactionResult)}`);
+      } catch (error) {
+        messages.push(`실거래가 실패: ${getErrorMessage(error)}`);
+      }
+
+      let canSyncBasicInfo = Boolean(apartment.kapt_code);
+
+      if (!canSyncBasicInfo) {
+        try {
+          const resolveResult = await resolveKaptCode(accessToken);
+          const candidates = resolveResult.candidates ?? [];
+
+          setKaptCodeCandidates(candidates);
+
+          if (resolveResult.applied && resolveResult.selected) {
+            canSyncBasicInfo = true;
+            messages.push(
+              `K-apt 코드: ${resolveResult.selected.kaptName}(${resolveResult.selected.kaptCode}) 자동 저장`,
+            );
+          } else if (candidates.length > 0) {
+            messages.push("K-apt 코드: 후보 선택이 필요합니다.");
+          } else {
+            messages.push(`K-apt 코드: ${resolveResult.reason ?? "후보 없음"}`);
+          }
+        } catch (error) {
+          messages.push(`K-apt 코드 탐색 실패: ${getErrorMessage(error)}`);
+        }
+      }
+
+      if (canSyncBasicInfo) {
+        try {
+          const basicInfoResult = await syncBasicInfo(accessToken);
+          messages.push(`기본정보: ${formatBasicInfoSyncMessage(basicInfoResult)}`);
+        } catch (error) {
+          messages.push(`기본정보 실패: ${getErrorMessage(error)}`);
+        }
+      }
+
+      await loadApartment();
+      setMessage(messages.join(" / "));
+    } finally {
+      setIsComprehensiveSyncing(false);
+    }
+  }
+
+  async function handleSelectKaptCandidate(kaptCode: string) {
+    if (!supabase || !session || !apartment || !isAdmin) {
+      setMessage("K-apt 코드 선택은 운영자 계정만 실행할 수 있습니다.");
+      return;
+    }
+
+    setIsComprehensiveSyncing(true);
+    setMessage(null);
+
+    try {
+      const accessToken = await getAccessToken();
+      const resolveResult = await resolveKaptCode(accessToken, kaptCode);
+
+      if (!resolveResult.applied || !resolveResult.selected) {
+        setMessage(resolveResult.reason ?? "K-apt 코드를 저장하지 못했습니다.");
+        return;
+      }
+
+      const basicInfoResult = await syncBasicInfo(accessToken);
+
+      setKaptCodeCandidates([]);
+      await loadApartment();
+      setMessage(
+        `K-apt 코드 ${resolveResult.selected.kaptCode}를 저장했습니다. ${formatBasicInfoSyncMessage(
+          basicInfoResult,
+        )}`,
+      );
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsComprehensiveSyncing(false);
+    }
+  }
+
+  async function getAccessToken() {
+    if (!supabase) {
+      return "";
+    }
+
+    const {
+      data: { session: currentSession },
+    } = await supabase.auth.getSession();
+
+    return currentSession?.access_token ?? "";
+  }
+
+  async function syncTransactions(accessToken: string) {
+    const { response, result } = await postApartmentJson<TransactionSyncResult>(
+      `/api/apartments/${apartmentId}/transactions/sync`,
+      accessToken,
+    );
+
+    if (!response.ok) {
+      throw new Error(result.error ?? "실거래가 동기화에 실패했습니다.");
+    }
+
+    return result;
+  }
+
+  async function resolveKaptCode(accessToken: string, kaptCode?: string) {
+    const { response, result } = await postApartmentJson<KaptCodeResolveResult>(
+      `/api/apartments/${apartmentId}/kapt-code/resolve`,
+      accessToken,
+      kaptCode ? { kaptCode } : {},
+    );
+
+    if (!response.ok) {
+      throw new Error(result.error ?? "K-apt 코드 탐색에 실패했습니다.");
+    }
+
+    return result;
+  }
+
+  async function syncBasicInfo(accessToken: string) {
+    const { response, result } = await postApartmentJson<BasicInfoSyncResult>(
+      `/api/apartments/${apartmentId}/basic-info/sync`,
+      accessToken,
+    );
+
+    if (!response.ok) {
+      throw new Error(result.error ?? "K-apt 기본정보 동기화에 실패했습니다.");
+    }
+
+    return result;
   }
 
   const title = mockApartment?.name ?? apartment?.display_name ?? apartment?.name;
@@ -323,6 +458,48 @@ export function ApartmentDetailClient({
         </div>
       ) : null}
 
+      {kaptCodeCandidates.length > 0 ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+          <p className="font-semibold">K-apt 코드 후보</p>
+          <p className="mt-1 leading-6">
+            후보가 여러 개라 자동 저장하지 않았습니다. 실제 단지와 일치하는 항목을
+            선택하면 K-apt 기본정보 조회까지 이어집니다.
+          </p>
+          <ul className="mt-3 grid gap-2">
+            {kaptCodeCandidates.map((candidate) => (
+              <li
+                key={candidate.kaptCode}
+                className="flex flex-col gap-2 rounded-md border border-emerald-200 bg-white p-3 md:flex-row md:items-center md:justify-between"
+              >
+                <div>
+                  <p className="font-semibold text-slate-950">
+                    {candidate.kaptName} · {candidate.kaptCode}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    {[candidate.sido, candidate.sigungu, candidate.eupmyeondong, candidate.ri]
+                      .filter(Boolean)
+                      .join(" ")}
+                    {candidate.bjdCode ? ` · ${candidate.bjdCode}` : ""}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {candidate.reasons.join(", ") || "후보"} · 점수{" "}
+                    {candidate.score}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSelectKaptCandidate(candidate.kaptCode)}
+                  disabled={isComprehensiveSyncing || !isAdmin}
+                  className="w-fit rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:bg-slate-400"
+                >
+                  이 코드 선택
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <section className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
@@ -334,7 +511,27 @@ export function ApartmentDetailClient({
               {memo}
             </p>
           </div>
-          <StatusPill status={status} />
+          <div className="flex flex-col items-start gap-3 md:items-end">
+            <StatusPill status={status} />
+            {!mockApartment && session ? (
+              <button
+                type="button"
+                onClick={() => void handleComprehensiveSync()}
+                disabled={
+                  isComprehensiveSyncing ||
+                  isSyncing ||
+                  isBasicInfoSyncing ||
+                  !apartment?.lawd_cd ||
+                  !isAdmin
+                }
+                className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+              >
+                {isComprehensiveSyncing
+                  ? "종합 조회 중"
+                  : "아파트 종합 정보 조회하기"}
+              </button>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -357,7 +554,12 @@ export function ApartmentDetailClient({
               <button
                 type="button"
                 onClick={() => void handleBasicInfoSync()}
-                disabled={isBasicInfoSyncing || !apartment?.kapt_code || !isAdmin}
+                disabled={
+                  isBasicInfoSyncing ||
+                  isComprehensiveSyncing ||
+                  !apartment?.kapt_code ||
+                  !isAdmin
+                }
                 className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
               >
                 {isBasicInfoSyncing ? "조회 중" : "K-apt 기본정보 불러오기"}
@@ -368,7 +570,8 @@ export function ApartmentDetailClient({
                 </p>
               ) : !apartment?.kapt_code ? (
                 <p className="max-w-64 text-xs leading-5 text-slate-500">
-                  단지 수정에서 K-apt 코드를 입력하면 버튼이 활성화됩니다.
+                  종합 조회로 K-apt 코드를 자동 탐색하거나, 단지 수정에서 직접
+                  입력하면 버튼이 활성화됩니다.
                 </p>
               ) : null}
             </div>
@@ -414,8 +617,8 @@ export function ApartmentDetailClient({
           </div>
         ) : (
           <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-            아직 저장된 K-apt 기본정보가 없습니다. 운영자 계정에서 K-apt 코드를
-            확인한 뒤 기본정보를 불러오세요.
+            아직 저장된 K-apt 기본정보가 없습니다. 운영자 계정에서 종합 조회를
+            실행하거나 K-apt 코드를 확인한 뒤 기본정보를 불러오세요.
           </p>
         )}
       </section>
@@ -439,7 +642,12 @@ export function ApartmentDetailClient({
               <button
                 type="button"
                 onClick={() => void handleTransactionSync()}
-                disabled={isSyncing || !apartment?.lawd_cd || !isAdmin}
+                disabled={
+                  isSyncing ||
+                  isComprehensiveSyncing ||
+                  !apartment?.lawd_cd ||
+                  !isAdmin
+                }
                 className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
               >
                 {isSyncing ? "조회 중" : "최근 실거래가 불러오기"}
@@ -804,6 +1012,43 @@ async function readJsonResult<T>(response: Response): Promise<T> {
   } catch {
     return {} as T;
   }
+}
+
+async function postApartmentJson<T>(
+  url: string,
+  accessToken: string,
+  body: Record<string, unknown> = {},
+) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await readJsonResult<T & { error?: string }>(response);
+
+  return { response, result };
+}
+
+function formatTransactionSyncMessage(result: TransactionSyncResult) {
+  const monthsChecked = result.monthsChecked ?? 0;
+  const matchedCount = result.matchedCount ?? 0;
+
+  return matchedCount > 0 && result.dealYmd
+    ? `최근 ${monthsChecked}개월을 확인했고, ${result.dealYmd} 실거래가 ${matchedCount}건을 반영했습니다.`
+    : `최근 ${monthsChecked}개월에서 단지명 일치 거래를 찾지 못했습니다.`;
+}
+
+function formatBasicInfoSyncMessage(result: BasicInfoSyncResult) {
+  return result.kaptName
+    ? `${result.kaptName} K-apt 기본정보를 반영했습니다.`
+    : "K-apt 기본정보를 반영했습니다.";
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "요청 처리에 실패했습니다.";
 }
 
 function formatOptionalCount(value: number | null, suffix: string) {

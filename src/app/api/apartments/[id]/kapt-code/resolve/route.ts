@@ -93,6 +93,7 @@ export async function POST(
   try {
     listResult = await fetchKaptApartmentList({
       serviceKey: process.env.KAPT_API_KEY,
+      sidoCode: apartment.lawd_cd.slice(0, 2),
     });
   } catch (error) {
     return NextResponse.json(

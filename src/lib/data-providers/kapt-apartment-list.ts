@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 
 export const KAPT_APARTMENT_LIST_ENDPOINT =
-  "http://apis.data.go.kr/1613000/AptListService2/getTotalAptList";
+  "http://apis.data.go.kr/1613000/AptListService3/getSidoAptList3";
 
 export type KaptApartmentListItem = {
   kaptCode: string;
@@ -20,6 +20,7 @@ export type KaptApartmentListParseResult = {
 
 export type FetchKaptApartmentListParams = {
   serviceKey: string;
+  sidoCode: string;
   pageNo?: number;
   numOfRows?: number;
 };
@@ -34,27 +35,44 @@ const parser = new XMLParser({
 
 export async function fetchKaptApartmentList({
   serviceKey,
-  pageNo = 1,
-  numOfRows = 20_000,
+  sidoCode,
+  numOfRows = 1000,
 }: FetchKaptApartmentListParams) {
-  const response = await fetch(
-    buildKaptApartmentListUrl({ serviceKey, pageNo, numOfRows }),
-  );
-  const body = await response.text();
+  const items: KaptApartmentListItem[] = [];
+  let pageNo = 1;
+  let totalCount = Number.POSITIVE_INFINITY;
 
-  if (!response.ok) {
-    throwKaptApartmentListHttpError(response.status, body);
+  while ((pageNo - 1) * numOfRows < totalCount && pageNo <= 20) {
+    const response = await fetch(
+      buildKaptApartmentListUrl({ serviceKey, sidoCode, pageNo, numOfRows }),
+    );
+    const body = await response.text();
+
+    if (!response.ok) {
+      throwKaptApartmentListHttpError(response.status, body);
+    }
+
+    const page = parseKaptApartmentListResponse(body);
+
+    totalCount = page.totalCount;
+    items.push(...page.items);
+    pageNo += 1;
   }
 
-  return parseKaptApartmentListResponse(body);
+  return {
+    totalCount: Number.isFinite(totalCount) ? totalCount : items.length,
+    items,
+  };
 }
 
 export function buildKaptApartmentListUrl({
   serviceKey,
+  sidoCode,
   pageNo = 1,
-  numOfRows = 20_000,
+  numOfRows = 1000,
 }: FetchKaptApartmentListParams) {
   const params = new URLSearchParams({
+    sidoCode,
     pageNo: String(pageNo),
     numOfRows: String(numOfRows),
   });

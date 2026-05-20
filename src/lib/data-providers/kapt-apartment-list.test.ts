@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseKaptApartmentListResponse } from "./kapt-apartment-list";
+import {
+  buildKaptApartmentListUrl,
+  parseKaptApartmentListResponse,
+} from "./kapt-apartment-list";
 
 describe("parseKaptApartmentListResponse", () => {
   it("parses apartment list items from XML responses", () => {
@@ -81,5 +84,22 @@ describe("parseKaptApartmentListResponse", () => {
         </OpenAPI_ServiceResponse>
       `),
     ).toThrow("K-apt apartment list API error 30");
+  });
+
+  it("builds a city/province list URL with sidoCode", () => {
+    const url = buildKaptApartmentListUrl({
+      serviceKey: "decoded/key",
+      sidoCode: "11",
+      pageNo: 2,
+      numOfRows: 1000,
+    });
+
+    expect(url).toContain(
+      "http://apis.data.go.kr/1613000/AptListService3/getSidoAptList3",
+    );
+    expect(url).toContain("serviceKey=decoded%2Fkey");
+    expect(url).toContain("sidoCode=11");
+    expect(url).toContain("pageNo=2");
+    expect(url).toContain("numOfRows=1000");
   });
 });

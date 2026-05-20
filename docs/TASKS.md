@@ -51,7 +51,7 @@
 - [ ] Supabase에 거래 migration 실제 적용
 - [ ] Vercel에 `MOLIT_API_KEY` 등록
 - [ ] 실제 국토부 API 응답으로 운영 환경 동기화 검증
-- [ ] 평형대 bucket 계산
+- [x] 평형대 bucket 계산
 - [ ] K-apt API 문서 확인
 - [ ] K-apt 코드 수동 보정 UI
 

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { apartments as mockApartments } from "@/lib/mock-data";
+import { summarizeApartmentPrices } from "@/lib/services/price-summary";
 import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -187,6 +188,14 @@ export function ApartmentDetailClient({
   const address = mockApartment?.address ?? apartment?.address ?? "주소 미입력";
   const memo = mockApartment?.note ?? apartment?.memo ?? "메모 없음";
   const status = mockApartment?.status ?? apartment?.status ?? "candidate";
+  const priceSummary = useMemo(
+    () => summarizeApartmentPrices(transactions),
+    [transactions],
+  );
+  const maxTrendPrice = Math.max(
+    ...priceSummary.monthlyTrend.map((item) => item.averagePriceKrw),
+    0,
+  );
 
   return (
     <div className="grid gap-5">
@@ -275,52 +284,150 @@ export function ApartmentDetailClient({
         </div>
 
         {transactions.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left">
-              <thead className="bg-slate-50 text-sm text-slate-600">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">계약일</th>
-                  <th className="px-4 py-3 font-semibold">전용면적</th>
-                  <th className="px-4 py-3 font-semibold">층</th>
-                  <th className="px-4 py-3 font-semibold">거래금액</th>
-                  <th className="px-4 py-3 font-semibold">원천 단지명</th>
-                  <th className="px-4 py-3 font-semibold">상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((transaction) => (
-                  <tr
-                    key={transaction.id}
-                    className="border-b border-slate-200 last:border-0"
-                  >
-                    <td className="px-4 py-3 text-sm text-slate-700">
-                      {formatDate(transaction.deal_date)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-700">
-                      {Number(transaction.exclusive_area_m2).toLocaleString("ko-KR", {
-                        maximumFractionDigits: 2,
-                      })}
-                      ㎡
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-700">
-                      {transaction.floor ?? "-"}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-slate-950">
-                      {formatKrw(transaction.deal_amount_krw)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-700">
-                      {transaction.apartment_name_from_source ?? "-"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-700">
-                      {transaction.cancel_yn
-                        ? `해제 ${transaction.cancel_date ?? ""}`
-                        : "정상"}
-                    </td>
+          <>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {priceSummary.areaSummaries.map((summary) => (
+                <article
+                  key={summary.areaBucket}
+                  className="rounded-md border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">
+                        {summary.areaBucket}㎡대
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {summary.exclusiveAreaMinM2.toLocaleString("ko-KR", {
+                          maximumFractionDigits: 2,
+                        })}
+                        ~
+                        {summary.exclusiveAreaMaxM2.toLocaleString("ko-KR", {
+                          maximumFractionDigits: 2,
+                        })}
+                        ㎡
+                      </p>
+                    </div>
+                    <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-600">
+                      {summary.transactionCount}건
+                    </span>
+                  </div>
+                  <p className="mt-4 text-xl font-semibold text-slate-950">
+                    {formatKrw(summary.latestPriceKrw)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    최근 거래 {formatDate(summary.latestDealDate)}
+                  </p>
+                  <dl className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <dt className="text-slate-500">평균</dt>
+                      <dd className="mt-1 font-semibold text-slate-800">
+                        {formatKrw(summary.averagePriceKrw)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">최저</dt>
+                      <dd className="mt-1 font-semibold text-slate-800">
+                        {formatKrw(summary.minPriceKrw)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">최고</dt>
+                      <dd className="mt-1 font-semibold text-slate-800">
+                        {formatKrw(summary.maxPriceKrw)}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+
+            {priceSummary.monthlyTrend.length > 0 ? (
+              <div className="rounded-md border border-slate-200 bg-white p-4">
+                <h3 className="text-sm font-semibold text-slate-950">
+                  월별 평균 거래가 추이
+                </h3>
+                <div className="mt-4 grid gap-3">
+                  {priceSummary.monthlyTrend.slice(-12).map((point) => (
+                    <div
+                      key={`${point.month}-${point.areaBucket}`}
+                      className="grid grid-cols-[5rem_1fr_5rem] items-center gap-3 text-xs"
+                    >
+                      <span className="text-slate-500">
+                        {point.month} · {point.areaBucket}
+                      </span>
+                      <div className="h-2 rounded-full bg-slate-100">
+                        <div
+                          className="h-2 rounded-full bg-emerald-700"
+                          style={{
+                            width:
+                              maxTrendPrice > 0
+                                ? `${Math.max(
+                                    (point.averagePriceKrw / maxTrendPrice) * 100,
+                                    6,
+                                  )}%`
+                                : "0%",
+                          }}
+                        />
+                      </div>
+                      <span className="text-right font-semibold text-slate-700">
+                        {formatKrw(point.averagePriceKrw)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left">
+                <thead className="bg-slate-50 text-sm text-slate-600">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">계약일</th>
+                    <th className="px-4 py-3 font-semibold">전용면적</th>
+                    <th className="px-4 py-3 font-semibold">층</th>
+                    <th className="px-4 py-3 font-semibold">거래금액</th>
+                    <th className="px-4 py-3 font-semibold">원천 단지명</th>
+                    <th className="px-4 py-3 font-semibold">상태</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {transactions.map((transaction) => (
+                    <tr
+                      key={transaction.id}
+                      className="border-b border-slate-200 last:border-0"
+                    >
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {formatDate(transaction.deal_date)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {Number(transaction.exclusive_area_m2).toLocaleString(
+                          "ko-KR",
+                          {
+                            maximumFractionDigits: 2,
+                          },
+                        )}
+                        ㎡
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {transaction.floor ?? "-"}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold text-slate-950">
+                        {formatKrw(transaction.deal_amount_krw)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {transaction.apartment_name_from_source ?? "-"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {transaction.cancel_yn
+                          ? `해제 ${transaction.cancel_date ?? ""}`
+                          : "정상"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
             아직 저장된 실거래가가 없습니다. 운영자 계정에서 법정동코드를 확인한 뒤

@@ -112,4 +112,38 @@ describe("resolveKaptCodeCandidate", () => {
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0].kaptCode).toBe("A11560101");
   });
+
+  it("keeps name-matched candidates for manual selection when lawd filtering has no matches", () => {
+    const result = resolveKaptCodeCandidate({
+      apartment: {
+        name: "Boramae Honorsville",
+        display_name: null,
+        address: "Seoul Yeongdeungpo-gu",
+        road_address: null,
+        lawd_cd: "1156013200",
+      },
+      aliases: [],
+      transactions: [
+        {
+          apartment_name_from_source: "Boramae Honorsville",
+          address_from_source: null,
+        },
+      ],
+      candidates: [
+        {
+          kaptCode: "A11560132",
+          kaptName: "Boramae Honorsville",
+          bjdCode: null,
+          sido: "Seoul",
+          sigungu: "Yeongdeungpo-gu",
+          eupmyeondong: null,
+          ri: null,
+        },
+      ],
+    });
+
+    expect(result.status).toBe("needs_selection");
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0].kaptCode).toBe("A11560132");
+  });
 });

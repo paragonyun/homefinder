@@ -2,6 +2,8 @@ import { XMLParser } from "fast-xml-parser";
 
 export const KAPT_APARTMENT_LIST_ENDPOINT =
   "http://apis.data.go.kr/1613000/AptListService3/getSidoAptList3";
+export const KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT =
+  "http://apis.data.go.kr/1613000/AptListService3/getLegaldongAptList3";
 
 export type KaptApartmentListItem = {
   kaptCode: string;
@@ -21,6 +23,13 @@ export type KaptApartmentListParseResult = {
 export type FetchKaptApartmentListParams = {
   serviceKey: string;
   sidoCode: string;
+  pageNo?: number;
+  numOfRows?: number;
+};
+
+export type FetchKaptLegalDongApartmentListParams = {
+  serviceKey: string;
+  bjdCode: string;
   pageNo?: number;
   numOfRows?: number;
 };
@@ -65,6 +74,43 @@ export async function fetchKaptApartmentList({
   };
 }
 
+export async function fetchKaptApartmentListByLegalDong({
+  serviceKey,
+  bjdCode,
+  numOfRows = 100,
+}: FetchKaptLegalDongApartmentListParams) {
+  const items: KaptApartmentListItem[] = [];
+  let pageNo = 1;
+  let totalCount = Number.POSITIVE_INFINITY;
+
+  while ((pageNo - 1) * numOfRows < totalCount && pageNo <= 20) {
+    const response = await fetch(
+      buildKaptLegalDongApartmentListUrl({
+        serviceKey,
+        bjdCode,
+        pageNo,
+        numOfRows,
+      }),
+    );
+    const body = await response.text();
+
+    if (!response.ok) {
+      throwKaptApartmentListHttpError(response.status, body);
+    }
+
+    const page = parseKaptApartmentListResponse(body);
+
+    totalCount = page.totalCount;
+    items.push(...page.items);
+    pageNo += 1;
+  }
+
+  return {
+    totalCount: Number.isFinite(totalCount) ? totalCount : items.length,
+    items,
+  };
+}
+
 export function buildKaptApartmentListUrl({
   serviceKey,
   sidoCode,
@@ -82,6 +128,25 @@ export function buildKaptApartmentListUrl({
     : encodeURIComponent(trimmedServiceKey);
 
   return `${KAPT_APARTMENT_LIST_ENDPOINT}?serviceKey=${serviceKeyParam}&${params.toString()}`;
+}
+
+export function buildKaptLegalDongApartmentListUrl({
+  serviceKey,
+  bjdCode,
+  pageNo = 1,
+  numOfRows = 100,
+}: FetchKaptLegalDongApartmentListParams) {
+  const params = new URLSearchParams({
+    bjdCode,
+    pageNo: String(pageNo),
+    numOfRows: String(numOfRows),
+  });
+  const trimmedServiceKey = serviceKey.trim();
+  const serviceKeyParam = looksUrlEncoded(trimmedServiceKey)
+    ? trimmedServiceKey
+    : encodeURIComponent(trimmedServiceKey);
+
+  return `${KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT}?serviceKey=${serviceKeyParam}&${params.toString()}`;
 }
 
 export function parseKaptApartmentListResponse(

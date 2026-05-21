@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
   fetchKaptApartmentList,
+  fetchKaptApartmentListByLegalDong,
   KAPT_APARTMENT_LIST_ENDPOINT,
+  KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT,
 } from "@/lib/data-providers/kapt-apartment-list";
 import {
   resolveKaptCodeCandidate,
@@ -15,6 +17,10 @@ import {
 } from "@/lib/supabase/server";
 
 const KAPT_LIST_SOURCE_NAME = "kapt-apartment-list";
+type KaptListResult = Awaited<ReturnType<typeof fetchKaptApartmentList>> & {
+  endpoint: string;
+  source: string;
+};
 
 export async function POST(
   request: Request,
@@ -88,12 +94,12 @@ export async function POST(
     );
   }
 
-  let listResult: Awaited<ReturnType<typeof fetchKaptApartmentList>>;
+  let listResult: KaptListResult;
 
   try {
-    listResult = await fetchKaptApartmentList({
+    listResult = await fetchKaptCandidates({
       serviceKey: process.env.KAPT_API_KEY,
-      sidoCode: apartment.lawd_cd.slice(0, 2),
+      lawdCd: apartment.lawd_cd,
     });
   } catch (error) {
     return NextResponse.json(
@@ -174,18 +180,18 @@ export async function POST(
   });
   const { error: rawError } = await supabase.from("raw_api_responses").insert({
     provider: "kapt",
-    endpoint: KAPT_APARTMENT_LIST_ENDPOINT,
+    endpoint: listResult.endpoint,
     request_hash: hashText(
       JSON.stringify({
         apartmentId,
         lawdCd: apartment.lawd_cd,
-        source: KAPT_LIST_SOURCE_NAME,
+        source: listResult.source,
       }),
     ),
     request_params: {
       apartmentId,
       lawdCd: apartment.lawd_cd,
-      source: KAPT_LIST_SOURCE_NAME,
+      source: listResult.source,
     },
     response_body: {
       totalCount: listResult.totalCount,
@@ -219,6 +225,44 @@ export async function POST(
     candidates: resolution.candidates.map(toPublicCandidate),
     reason: resolution.reason,
   });
+}
+
+async function fetchKaptCandidates({
+  serviceKey,
+  lawdCd,
+}: {
+  serviceKey: string;
+  lawdCd: string;
+}): Promise<KaptListResult> {
+  if (lawdCd.length === 10) {
+    try {
+      const legalDongResult = await fetchKaptApartmentListByLegalDong({
+        serviceKey,
+        bjdCode: lawdCd,
+      });
+
+      if (legalDongResult.items.length > 0) {
+        return {
+          ...legalDongResult,
+          endpoint: KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT,
+          source: `${KAPT_LIST_SOURCE_NAME}-legal-dong`,
+        };
+      }
+    } catch {
+      // Fall back to the city/province list when the public API rejects this operation.
+    }
+  }
+
+  const cityResult = await fetchKaptApartmentList({
+    serviceKey,
+    sidoCode: lawdCd.slice(0, 2),
+  });
+
+  return {
+    ...cityResult,
+    endpoint: KAPT_APARTMENT_LIST_ENDPOINT,
+    source: `${KAPT_LIST_SOURCE_NAME}-sido`,
+  };
 }
 
 function toPublicCandidate(candidate: ScoredKaptCodeCandidate) {

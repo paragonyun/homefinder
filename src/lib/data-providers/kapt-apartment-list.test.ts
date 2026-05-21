@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildKaptLegalDongApartmentListUrl,
   buildKaptApartmentListUrl,
   parseKaptApartmentListResponse,
 } from "./kapt-apartment-list";
@@ -101,5 +102,22 @@ describe("parseKaptApartmentListResponse", () => {
     expect(url).toContain("sidoCode=11");
     expect(url).toContain("pageNo=2");
     expect(url).toContain("numOfRows=1000");
+  });
+
+  it("builds a legal-dong list URL with bjdCode", () => {
+    const url = buildKaptLegalDongApartmentListUrl({
+      serviceKey: "decoded/key",
+      bjdCode: "1156013200",
+      pageNo: 1,
+      numOfRows: 100,
+    });
+
+    expect(url).toContain(
+      "http://apis.data.go.kr/1613000/AptListService3/getLegaldongAptList3",
+    );
+    expect(url).toContain("serviceKey=decoded%2Fkey");
+    expect(url).toContain("bjdCode=1156013200");
+    expect(url).toContain("pageNo=1");
+    expect(url).toContain("numOfRows=100");
   });
 });

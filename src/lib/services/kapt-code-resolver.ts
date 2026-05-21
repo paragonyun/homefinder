@@ -59,7 +59,7 @@ export function resolveKaptCodeCandidate({
 }): KaptCodeResolution {
   const filteredCandidates = filterCandidatesByLawd(candidates, apartment.lawd_cd);
 
-  if (filteredCandidates.length === 0) {
+  if (candidates.length === 0) {
     return {
       status: "none",
       selected: null,
@@ -70,7 +70,9 @@ export function resolveKaptCodeCandidate({
 
   const nameHints = getNameHints(apartment, aliases, transactions);
   const addressHints = getAddressHints(apartment, transactions);
-  const scoredCandidates = filteredCandidates
+  const isLawdFiltered = filteredCandidates.length > 0;
+  const candidatesToScore = isLawdFiltered ? filteredCandidates : candidates;
+  const scoredCandidates = candidatesToScore
     .map((candidate) =>
       scoreCandidate(candidate, {
         lawdCd: apartment.lawd_cd,

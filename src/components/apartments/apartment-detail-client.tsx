@@ -51,6 +51,8 @@ type KaptCodeCandidate = {
   sigungu: string | null;
   eupmyeondong: string | null;
   ri: string | null;
+  legalAddress?: string | null;
+  roadAddress?: string | null;
   score: number;
   reasons: string[];
 };
@@ -481,6 +483,11 @@ export function ApartmentDetailClient({
                       .join(" ")}
                     {candidate.bjdCode ? ` · ${candidate.bjdCode}` : ""}
                   </p>
+                  {candidate.roadAddress || candidate.legalAddress ? (
+                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                      {candidate.roadAddress ?? candidate.legalAddress}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-xs text-slate-500">
                     {candidate.reasons.join(", ") || "후보"} · 점수{" "}
                     {candidate.score}

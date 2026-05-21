@@ -2,8 +2,16 @@ import { XMLParser } from "fast-xml-parser";
 
 export const KAPT_APARTMENT_LIST_ENDPOINT =
   "http://apis.data.go.kr/1613000/AptListService3/getSidoAptList3";
+export const KAPT_SIGUNGU_APARTMENT_LIST_ENDPOINT =
+  "http://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3";
 export const KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT =
   "http://apis.data.go.kr/1613000/AptListService3/getLegaldongAptList3";
+export const KAPT_LEGACY_APARTMENT_LIST_ENDPOINT =
+  "http://apis.data.go.kr/1611000/AptListService/getSidoAptList";
+export const KAPT_LEGACY_SIGUNGU_APARTMENT_LIST_ENDPOINT =
+  "http://apis.data.go.kr/1611000/AptListService/getSigunguAptList";
+export const KAPT_LEGACY_LEGAL_DONG_APARTMENT_LIST_ENDPOINT =
+  "http://apis.data.go.kr/1611000/AptListService/getLegaldongAptList";
 
 export type KaptApartmentListItem = {
   kaptCode: string;
@@ -13,6 +21,8 @@ export type KaptApartmentListItem = {
   sigungu: string | null;
   eupmyeondong: string | null;
   ri: string | null;
+  legalAddress?: string | null;
+  roadAddress?: string | null;
 };
 
 export type KaptApartmentListParseResult = {
@@ -20,9 +30,20 @@ export type KaptApartmentListParseResult = {
   items: KaptApartmentListItem[];
 };
 
+export type KaptApartmentListFetchResult = KaptApartmentListParseResult & {
+  endpoint: string;
+};
+
 export type FetchKaptApartmentListParams = {
   serviceKey: string;
   sidoCode: string;
+  pageNo?: number;
+  numOfRows?: number;
+};
+
+export type FetchKaptSigunguApartmentListParams = {
+  serviceKey: string;
+  sigunguCode: string;
   pageNo?: number;
   numOfRows?: number;
 };
@@ -47,31 +68,13 @@ export async function fetchKaptApartmentList({
   sidoCode,
   numOfRows = 1000,
 }: FetchKaptApartmentListParams) {
-  const items: KaptApartmentListItem[] = [];
-  let pageNo = 1;
-  let totalCount = Number.POSITIVE_INFINITY;
-
-  while ((pageNo - 1) * numOfRows < totalCount && pageNo <= 20) {
-    const response = await fetch(
-      buildKaptApartmentListUrl({ serviceKey, sidoCode, pageNo, numOfRows }),
-    );
-    const body = await response.text();
-
-    if (!response.ok) {
-      throwKaptApartmentListHttpError(response.status, body);
-    }
-
-    const page = parseKaptApartmentListResponse(body);
-
-    totalCount = page.totalCount;
-    items.push(...page.items);
-    pageNo += 1;
-  }
-
-  return {
-    totalCount: Number.isFinite(totalCount) ? totalCount : items.length,
-    items,
-  };
+  return fetchFromCandidateEndpoints({
+    endpoints: [KAPT_APARTMENT_LIST_ENDPOINT, KAPT_LEGACY_APARTMENT_LIST_ENDPOINT],
+    serviceKey,
+    paramName: "sidoCode",
+    paramValue: sidoCode,
+    numOfRows,
+  });
 }
 
 export async function fetchKaptApartmentListByLegalDong({
@@ -79,15 +82,102 @@ export async function fetchKaptApartmentListByLegalDong({
   bjdCode,
   numOfRows = 100,
 }: FetchKaptLegalDongApartmentListParams) {
+  return fetchFromCandidateEndpoints({
+    endpoints: [
+      KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT,
+      KAPT_LEGACY_LEGAL_DONG_APARTMENT_LIST_ENDPOINT,
+    ],
+    serviceKey,
+    paramName: "bjdCode",
+    paramValue: bjdCode,
+    numOfRows,
+  });
+}
+
+export async function fetchKaptApartmentListBySigungu({
+  serviceKey,
+  sigunguCode,
+  numOfRows = 1000,
+}: FetchKaptSigunguApartmentListParams) {
+  return fetchFromCandidateEndpoints({
+    endpoints: [
+      KAPT_SIGUNGU_APARTMENT_LIST_ENDPOINT,
+      KAPT_LEGACY_SIGUNGU_APARTMENT_LIST_ENDPOINT,
+    ],
+    serviceKey,
+    paramName: "sigunguCode",
+    paramValue: sigunguCode,
+    numOfRows,
+  });
+}
+
+async function fetchFromCandidateEndpoints({
+  endpoints,
+  serviceKey,
+  paramName,
+  paramValue,
+  numOfRows,
+}: {
+  endpoints: string[];
+  serviceKey: string;
+  paramName: "sidoCode" | "sigunguCode" | "bjdCode";
+  paramValue: string;
+  numOfRows: number;
+}): Promise<KaptApartmentListFetchResult> {
+  let lastError: Error | null = null;
+  let emptyResult: KaptApartmentListFetchResult | null = null;
+
+  for (const endpoint of endpoints) {
+    try {
+      const result = await fetchPaginatedKaptApartmentList({
+        endpoint,
+        serviceKey,
+        paramName,
+        paramValue,
+        numOfRows,
+      });
+
+      if (result.items.length > 0) {
+        return result;
+      }
+
+      emptyResult ??= result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  if (emptyResult) {
+    return emptyResult;
+  }
+
+  throw lastError ?? new Error("K-apt apartment list API request failed.");
+}
+
+async function fetchPaginatedKaptApartmentList({
+  endpoint,
+  serviceKey,
+  paramName,
+  paramValue,
+  numOfRows,
+}: {
+  endpoint: string;
+  serviceKey: string;
+  paramName: "sidoCode" | "sigunguCode" | "bjdCode";
+  paramValue: string;
+  numOfRows: number;
+}): Promise<KaptApartmentListFetchResult> {
   const items: KaptApartmentListItem[] = [];
   let pageNo = 1;
   let totalCount = Number.POSITIVE_INFINITY;
 
   while ((pageNo - 1) * numOfRows < totalCount && pageNo <= 20) {
     const response = await fetch(
-      buildKaptLegalDongApartmentListUrl({
+      buildKaptApartmentListUrlWithEndpoint({
+        endpoint,
         serviceKey,
-        bjdCode,
+        paramName,
+        paramValue,
         pageNo,
         numOfRows,
       }),
@@ -108,6 +198,7 @@ export async function fetchKaptApartmentListByLegalDong({
   return {
     totalCount: Number.isFinite(totalCount) ? totalCount : items.length,
     items,
+    endpoint,
   };
 }
 
@@ -117,17 +208,30 @@ export function buildKaptApartmentListUrl({
   pageNo = 1,
   numOfRows = 1000,
 }: FetchKaptApartmentListParams) {
-  const params = new URLSearchParams({
-    sidoCode,
-    pageNo: String(pageNo),
-    numOfRows: String(numOfRows),
+  return buildKaptApartmentListUrlWithEndpoint({
+    endpoint: KAPT_APARTMENT_LIST_ENDPOINT,
+    serviceKey,
+    paramName: "sidoCode",
+    paramValue: sidoCode,
+    pageNo,
+    numOfRows,
   });
-  const trimmedServiceKey = serviceKey.trim();
-  const serviceKeyParam = looksUrlEncoded(trimmedServiceKey)
-    ? trimmedServiceKey
-    : encodeURIComponent(trimmedServiceKey);
+}
 
-  return `${KAPT_APARTMENT_LIST_ENDPOINT}?serviceKey=${serviceKeyParam}&${params.toString()}`;
+export function buildKaptSigunguApartmentListUrl({
+  serviceKey,
+  sigunguCode,
+  pageNo = 1,
+  numOfRows = 1000,
+}: FetchKaptSigunguApartmentListParams) {
+  return buildKaptApartmentListUrlWithEndpoint({
+    endpoint: KAPT_SIGUNGU_APARTMENT_LIST_ENDPOINT,
+    serviceKey,
+    paramName: "sigunguCode",
+    paramValue: sigunguCode,
+    pageNo,
+    numOfRows,
+  });
 }
 
 export function buildKaptLegalDongApartmentListUrl({
@@ -136,8 +240,33 @@ export function buildKaptLegalDongApartmentListUrl({
   pageNo = 1,
   numOfRows = 100,
 }: FetchKaptLegalDongApartmentListParams) {
+  return buildKaptApartmentListUrlWithEndpoint({
+    endpoint: KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT,
+    serviceKey,
+    paramName: "bjdCode",
+    paramValue: bjdCode,
+    pageNo,
+    numOfRows,
+  });
+}
+
+function buildKaptApartmentListUrlWithEndpoint({
+  endpoint,
+  serviceKey,
+  paramName,
+  paramValue,
+  pageNo,
+  numOfRows,
+}: {
+  endpoint: string;
+  serviceKey: string;
+  paramName: "sidoCode" | "sigunguCode" | "bjdCode";
+  paramValue: string;
+  pageNo: number;
+  numOfRows: number;
+}) {
   const params = new URLSearchParams({
-    bjdCode,
+    [paramName]: paramValue,
     pageNo: String(pageNo),
     numOfRows: String(numOfRows),
   });
@@ -146,7 +275,7 @@ export function buildKaptLegalDongApartmentListUrl({
     ? trimmedServiceKey
     : encodeURIComponent(trimmedServiceKey);
 
-  return `${KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT}?serviceKey=${serviceKeyParam}&${params.toString()}`;
+  return `${endpoint}?serviceKey=${serviceKeyParam}&${params.toString()}`;
 }
 
 export function parseKaptApartmentListResponse(
@@ -207,6 +336,8 @@ function normalizeKaptApartmentListRecord(
     sigungu: cleanText(record.as2),
     eupmyeondong: cleanText(record.as3),
     ri: cleanText(record.as4),
+    legalAddress: cleanText(record.kaptAddr),
+    roadAddress: cleanText(readFirst(record, ["doroJuso", "dorojuso"])),
   };
 }
 
@@ -297,6 +428,16 @@ function cleanText(value: unknown) {
 
   const text = String(value).trim();
   return text.length > 0 && text.toLowerCase() !== "none" ? text : null;
+}
+
+function readFirst(record: KaptApartmentListRecord, keys: string[]) {
+  for (const key of keys) {
+    if (record[key] !== null && record[key] !== undefined) {
+      return record[key];
+    }
+  }
+
+  return null;
 }
 
 function parseInteger(value: unknown) {

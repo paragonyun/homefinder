@@ -4,9 +4,19 @@ import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
   fetchKaptApartmentList,
   fetchKaptApartmentListByLegalDong,
-  KAPT_APARTMENT_LIST_ENDPOINT,
-  KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT,
+  fetchKaptApartmentListBySigungu,
+  type KaptApartmentListFetchResult,
+  type KaptApartmentListItem,
 } from "@/lib/data-providers/kapt-apartment-list";
+import {
+  fetchKaptBasicInfoJson,
+  parseKaptBasicInfoResponse,
+} from "@/lib/data-providers/kapt-basic-info";
+import {
+  kaptDirectoryRowsToListItems,
+  toKaptDirectoryUpsertRows,
+  type KaptCodeDirectoryRow,
+} from "@/lib/services/kapt-code-directory";
 import {
   resolveKaptCodeCandidate,
   type ScoredKaptCodeCandidate,
@@ -17,8 +27,11 @@ import {
 } from "@/lib/supabase/server";
 
 const KAPT_LIST_SOURCE_NAME = "kapt-apartment-list";
-type KaptListResult = Awaited<ReturnType<typeof fetchKaptApartmentList>> & {
-  endpoint: string;
+const KAPT_DIRECTORY_SOURCE_NAME = "kapt-code-directory";
+const KAPT_DIRECTORY_ENDPOINT = "supabase:kapt_code_directory";
+
+type SupabaseRouteClient = NonNullable<ReturnType<typeof createSupabaseRouteClient>>;
+type KaptListResult = KaptApartmentListFetchResult & {
   source: string;
 };
 
@@ -94,57 +107,8 @@ export async function POST(
     );
   }
 
-  let listResult: KaptListResult;
-
-  try {
-    listResult = await fetchKaptCandidates({
-      serviceKey: process.env.KAPT_API_KEY,
-      lawdCd: apartment.lawd_cd,
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "K-apt 단지 목록 조회에 실패했습니다.",
-      },
-      { status: 502 },
-    );
-  }
-
   const selectedKaptCode =
     typeof body.kaptCode === "string" ? body.kaptCode.trim() : null;
-
-  if (selectedKaptCode) {
-    const selected = listResult.items.find(
-      (candidate) => candidate.kaptCode === selectedKaptCode,
-    );
-
-    if (!selected) {
-      return NextResponse.json(
-        { error: "선택한 K-apt 코드를 단지 목록에서 찾지 못했습니다." },
-        { status: 400 },
-      );
-    }
-
-    const { error: updateError } = await supabase
-      .from("apartments")
-      .update({ kapt_code: selected.kaptCode })
-      .eq("id", apartmentId);
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
-
-    return NextResponse.json({
-      applied: true,
-      selected: toPublicCandidate({ ...selected, score: 0, reasons: ["사용자 선택"] }),
-      candidates: [],
-      reason: "선택한 K-apt 코드를 저장했습니다.",
-    });
-  }
-
   const [aliasResult, transactionResult] = await Promise.all([
     supabase
       .from("apartment_aliases")
@@ -169,44 +133,105 @@ export async function POST(
     );
   }
 
-  const resolution = resolveKaptCodeCandidate({
+  const aliases = (aliasResult.data ?? []) as Array<{ alias: string | null }>;
+  const transactions = (transactionResult.data ?? []) as Array<{
+    apartment_name_from_source: string | null;
+    address_from_source: string | null;
+  }>;
+  let listResult = await fetchDirectoryCandidates(supabase, apartment.lawd_cd);
+
+  if (selectedKaptCode) {
+    let selected: KaptApartmentListItem | null =
+      listResult.items.find(
+      (candidate) => candidate.kaptCode === selectedKaptCode,
+    ) ?? null;
+
+    if (!selected) {
+      const externalResult = await fetchAndCacheExternalCandidates({
+        supabase,
+        serviceKey: process.env.KAPT_API_KEY,
+        lawdCd: apartment.lawd_cd,
+      });
+
+      listResult = mergeKaptListResults([listResult, externalResult]);
+      selected =
+        listResult.items.find(
+          (candidate) => candidate.kaptCode === selectedKaptCode,
+        ) ?? null;
+    }
+
+    if (!selected) {
+      selected = await validateSelectedKaptCode({
+        serviceKey: process.env.KAPT_API_KEY,
+        kaptCode: selectedKaptCode,
+      });
+    }
+
+    if (!selected) {
+      return NextResponse.json(
+        { error: "선택한 K-apt 코드를 공식 API에서 확인하지 못했습니다." },
+        { status: 400 },
+      );
+    }
+
+    const { error: updateError } = await supabase
+      .from("apartments")
+      .update({ kapt_code: selected.kaptCode })
+      .eq("id", apartmentId);
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      applied: true,
+      selected: toPublicCandidate({
+        ...selected,
+        score: 0,
+        reasons: ["사용자 선택"],
+      }),
+      candidates: [],
+      reason: "선택한 K-apt 코드를 저장했습니다.",
+    });
+  }
+
+  let resolution = resolveKaptCodeCandidate({
     apartment,
-    aliases: (aliasResult.data ?? []) as Array<{ alias: string | null }>,
-    transactions: (transactionResult.data ?? []) as Array<{
-      apartment_name_from_source: string | null;
-      address_from_source: string | null;
-    }>,
+    aliases,
+    transactions,
     candidates: listResult.items,
   });
-  const { error: rawError } = await supabase.from("raw_api_responses").insert({
-    provider: "kapt",
-    endpoint: listResult.endpoint,
-    request_hash: hashText(
-      JSON.stringify({
-        apartmentId,
-        lawdCd: apartment.lawd_cd,
-        source: listResult.source,
-      }),
-    ),
-    request_params: {
-      apartmentId,
-      lawdCd: apartment.lawd_cd,
-      source: listResult.source,
-    },
-    response_body: {
-      totalCount: listResult.totalCount,
-      status: resolution.status,
-      selected: resolution.selected ? toPublicCandidate(resolution.selected) : null,
-      candidates: resolution.candidates.map(toPublicCandidate),
-      reason: resolution.reason,
-    },
-    apartment_id: apartmentId,
-    user_id: user.id,
-  });
+  let externalErrorMessage: string | null = null;
 
-  if (rawError) {
-    return NextResponse.json({ error: rawError.message }, { status: 500 });
+  if (resolution.status !== "auto") {
+    try {
+      const externalResult = await fetchAndCacheExternalCandidates({
+        supabase,
+        serviceKey: process.env.KAPT_API_KEY,
+        lawdCd: apartment.lawd_cd,
+      });
+
+      listResult = mergeKaptListResults([listResult, externalResult]);
+      resolution = resolveKaptCodeCandidate({
+        apartment,
+        aliases,
+        transactions,
+        candidates: listResult.items,
+      });
+    } catch (error) {
+      externalErrorMessage = getErrorMessage(error);
+    }
   }
+
+  const rawWarning = await insertRawResolutionLog({
+    supabase,
+    apartmentId,
+    userId: user.id,
+    lawdCd: apartment.lawd_cd,
+    listResult,
+    resolution,
+    externalErrorMessage,
+  });
 
   if (resolution.status === "auto") {
     const { error: updateError } = await supabase
@@ -223,8 +248,79 @@ export async function POST(
     applied: resolution.status === "auto",
     selected: resolution.selected ? toPublicCandidate(resolution.selected) : null,
     candidates: resolution.candidates.map(toPublicCandidate),
-    reason: resolution.reason,
+    reason:
+      resolution.status === "none" && externalErrorMessage
+        ? `K-apt 후보를 찾지 못했습니다. 목록 API 오류: ${externalErrorMessage}`
+        : resolution.reason,
+    warning: rawWarning,
   });
+}
+
+async function fetchDirectoryCandidates(
+  supabase: SupabaseRouteClient,
+  lawdCd: string,
+): Promise<KaptListResult> {
+  const exactItems =
+    lawdCd.length === 10
+      ? await readDirectoryCandidates(supabase, lawdCd, "exact")
+      : [];
+  const sigunguItems =
+    lawdCd.length >= 5
+      ? await readDirectoryCandidates(supabase, lawdCd.slice(0, 5), "prefix")
+      : [];
+  const fallbackItems =
+    exactItems.length === 0 && sigunguItems.length === 0
+      ? await readDirectoryCandidates(supabase, lawdCd.slice(0, 2), "prefix")
+      : [];
+
+  return {
+    endpoint: KAPT_DIRECTORY_ENDPOINT,
+    source: KAPT_DIRECTORY_SOURCE_NAME,
+    totalCount: exactItems.length + sigunguItems.length + fallbackItems.length,
+    items: dedupeKaptItems([...exactItems, ...sigunguItems, ...fallbackItems]),
+  };
+}
+
+async function readDirectoryCandidates(
+  supabase: SupabaseRouteClient,
+  code: string,
+  match: "exact" | "prefix",
+) {
+  let query = supabase
+    .from("kapt_code_directory")
+    .select(
+      "kapt_code,kapt_name,normalized_kapt_name,bjd_code,sido,sigungu,eupmyeondong,ri,legal_address,road_address,source,source_endpoint,last_synced_at",
+    )
+    .limit(1000);
+
+  query =
+    match === "exact" ? query.eq("bjd_code", code) : query.like("bjd_code", `${code}%`);
+
+  const { data, error } = await query;
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  return kaptDirectoryRowsToListItems((data ?? []) as KaptCodeDirectoryRow[]);
+}
+
+async function fetchAndCacheExternalCandidates({
+  supabase,
+  serviceKey,
+  lawdCd,
+}: {
+  supabase: SupabaseRouteClient;
+  serviceKey: string;
+  lawdCd: string;
+}) {
+  const listResult = await fetchKaptCandidates({ serviceKey, lawdCd });
+  await cacheKaptCandidates({ supabase, listResult });
+  return listResult;
 }
 
 async function fetchKaptCandidates({
@@ -234,35 +330,215 @@ async function fetchKaptCandidates({
   serviceKey: string;
   lawdCd: string;
 }): Promise<KaptListResult> {
+  const results: KaptListResult[] = [];
+  const errors: string[] = [];
+
   if (lawdCd.length === 10) {
-    try {
-      const legalDongResult = await fetchKaptApartmentListByLegalDong({
+    const legalDongResult = await tryFetchKaptList(() =>
+      fetchKaptApartmentListByLegalDong({
         serviceKey,
         bjdCode: lawdCd,
-      });
+      }),
+    );
 
-      if (legalDongResult.items.length > 0) {
-        return {
-          ...legalDongResult,
-          endpoint: KAPT_LEGAL_DONG_APARTMENT_LIST_ENDPOINT,
-          source: `${KAPT_LIST_SOURCE_NAME}-legal-dong`,
-        };
-      }
-    } catch {
-      // Fall back to the city/province list when the public API rejects this operation.
-    }
+    collectExternalFetchResult(results, errors, legalDongResult, "legal-dong");
   }
 
-  const cityResult = await fetchKaptApartmentList({
-    serviceKey,
-    sidoCode: lawdCd.slice(0, 2),
+  if (lawdCd.length >= 5) {
+    const sigunguResult = await tryFetchKaptList(() =>
+      fetchKaptApartmentListBySigungu({
+        serviceKey,
+        sigunguCode: lawdCd.slice(0, 5),
+      }),
+    );
+
+    collectExternalFetchResult(results, errors, sigunguResult, "sigungu");
+  }
+
+  if (results.every((result) => result.items.length === 0)) {
+    const sidoResult = await tryFetchKaptList(() =>
+      fetchKaptApartmentList({
+        serviceKey,
+        sidoCode: lawdCd.slice(0, 2),
+      }),
+    );
+
+    collectExternalFetchResult(results, errors, sidoResult, "sido");
+  }
+
+  if (results.some((result) => result.items.length > 0) || errors.length === 0) {
+    return mergeKaptListResults(results);
+  }
+
+  throw new Error(errors.join(" / ") || "K-apt 단지 목록 조회에 실패했습니다.");
+}
+
+async function tryFetchKaptList(
+  fetcher: () => Promise<KaptApartmentListFetchResult>,
+) {
+  try {
+    return { result: await fetcher(), error: null };
+  } catch (error) {
+    return { result: null, error: getErrorMessage(error) };
+  }
+}
+
+function collectExternalFetchResult(
+  results: KaptListResult[],
+  errors: string[],
+  fetchResult: Awaited<ReturnType<typeof tryFetchKaptList>>,
+  sourceSuffix: string,
+) {
+  if (fetchResult.result) {
+    results.push({
+      ...fetchResult.result,
+      source: `${KAPT_LIST_SOURCE_NAME}-${sourceSuffix}`,
+    });
+  } else if (fetchResult.error) {
+    errors.push(`${sourceSuffix}: ${fetchResult.error}`);
+  }
+}
+
+async function cacheKaptCandidates({
+  supabase,
+  listResult,
+}: {
+  supabase: SupabaseRouteClient;
+  listResult: KaptListResult;
+}) {
+  const rows = toKaptDirectoryUpsertRows({
+    items: listResult.items,
+    source: listResult.source,
+    endpoint: listResult.endpoint,
   });
 
+  if (rows.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("kapt_code_directory")
+    .upsert(rows, { onConflict: "kapt_code" });
+
+  if (error && !isMissingTableError(error)) {
+    console.warn("Failed to cache K-apt directory rows", error);
+  }
+}
+
+async function validateSelectedKaptCode({
+  serviceKey,
+  kaptCode,
+}: {
+  serviceKey: string;
+  kaptCode: string;
+}): Promise<KaptApartmentListItem | null> {
+  try {
+    const response = await fetchKaptBasicInfoJson({ serviceKey, kaptCode });
+    const basicInfo = parseKaptBasicInfoResponse(response);
+
+    if (!basicInfo?.kaptCode || !basicInfo.kaptName) {
+      return null;
+    }
+
+    return {
+      kaptCode: basicInfo.kaptCode,
+      kaptName: basicInfo.kaptName,
+      bjdCode: null,
+      sido: null,
+      sigungu: null,
+      eupmyeondong: null,
+      ri: null,
+      legalAddress: basicInfo.legalAddress,
+      roadAddress: basicInfo.roadAddress,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function insertRawResolutionLog({
+  supabase,
+  apartmentId,
+  userId,
+  lawdCd,
+  listResult,
+  resolution,
+  externalErrorMessage,
+}: {
+  supabase: SupabaseRouteClient;
+  apartmentId: string;
+  userId: string;
+  lawdCd: string;
+  listResult: KaptListResult;
+  resolution: ReturnType<typeof resolveKaptCodeCandidate>;
+  externalErrorMessage: string | null;
+}) {
+  const { error } = await supabase.from("raw_api_responses").insert({
+    provider: "kapt",
+    endpoint: listResult.endpoint,
+    request_hash: hashText(
+      JSON.stringify({
+        apartmentId,
+        lawdCd,
+        source: listResult.source,
+      }),
+    ),
+    request_params: {
+      apartmentId,
+      lawdCd,
+      source: listResult.source,
+    },
+    response_body: {
+      totalCount: listResult.totalCount,
+      status: resolution.status,
+      selected: resolution.selected ? toPublicCandidate(resolution.selected) : null,
+      candidates: resolution.candidates.map(toPublicCandidate),
+      reason: resolution.reason,
+      externalErrorMessage,
+    },
+    apartment_id: apartmentId,
+    user_id: userId,
+  });
+
+  if (!error) {
+    return null;
+  }
+
+  console.warn("Failed to store K-apt resolve raw response", error);
+  return error.message;
+}
+
+function mergeKaptListResults(results: KaptListResult[]): KaptListResult {
+  const items = dedupeKaptItems(results.flatMap((result) => result.items));
+
   return {
-    ...cityResult,
-    endpoint: KAPT_APARTMENT_LIST_ENDPOINT,
-    source: `${KAPT_LIST_SOURCE_NAME}-sido`,
+    endpoint: results.map((result) => result.endpoint).join(","),
+    source: results.map((result) => result.source).join(","),
+    totalCount: items.length,
+    items,
   };
+}
+
+function dedupeKaptItems(items: KaptApartmentListItem[]) {
+  const byCode = new Map<string, KaptApartmentListItem>();
+
+  for (const item of items) {
+    const existing = byCode.get(item.kaptCode);
+
+    byCode.set(item.kaptCode, {
+      ...existing,
+      ...item,
+      bjdCode: item.bjdCode ?? existing?.bjdCode ?? null,
+      sido: item.sido ?? existing?.sido ?? null,
+      sigungu: item.sigungu ?? existing?.sigungu ?? null,
+      eupmyeondong: item.eupmyeondong ?? existing?.eupmyeondong ?? null,
+      ri: item.ri ?? existing?.ri ?? null,
+      legalAddress: item.legalAddress ?? existing?.legalAddress ?? null,
+      roadAddress: item.roadAddress ?? existing?.roadAddress ?? null,
+    });
+  }
+
+  return Array.from(byCode.values());
 }
 
 function toPublicCandidate(candidate: ScoredKaptCodeCandidate) {
@@ -274,6 +550,8 @@ function toPublicCandidate(candidate: ScoredKaptCodeCandidate) {
     sigungu: candidate.sigungu,
     eupmyeondong: candidate.eupmyeondong,
     ri: candidate.ri,
+    legalAddress: candidate.legalAddress ?? null,
+    roadAddress: candidate.roadAddress ?? null,
     score: candidate.score,
     reasons: candidate.reasons,
   };
@@ -287,6 +565,10 @@ function getBearerToken(request: Request) {
   const authorization = request.headers.get("authorization");
   const match = authorization?.match(/^Bearer\s+(.+)$/i);
   return match?.[1] ?? null;
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function readJsonBody(request: Request) {

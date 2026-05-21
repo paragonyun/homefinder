@@ -178,6 +178,26 @@ Supabase Auth 사용자 보조 프로필입니다.
 - `created_at timestamptz`
 - `updated_at timestamptz`
 
+### kapt_code_directory
+
+실제 migration: `supabase/migrations/20260521000100_kapt_code_directory.sql`
+
+K-apt 단지 코드 후보 검색용 캐시입니다. 공식 단지 목록 API 결과를 저장하고, `apartments.kapt_code` 확정 전 후보 탐색 인덱스로 사용합니다.
+
+- `kapt_code text primary key`
+- `kapt_name text`
+- `normalized_kapt_name text`
+- `bjd_code text`
+- `sido text`
+- `sigungu text`
+- `eupmyeondong text`
+- `ri text`
+- `legal_address text`
+- `road_address text`
+- `source text`
+- `source_endpoint text`
+- `last_synced_at timestamptz`
+
 ### apartment_building_info
 
 - `id uuid primary key`

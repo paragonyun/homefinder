@@ -2,6 +2,7 @@ import type { KaptApartmentListItem } from "../data-providers/kapt-apartment-lis
 import {
   isMolitApartmentNameCandidate,
   isMolitApartmentNameMatch,
+  normalizeApartmentNameForMolit,
 } from "../data-providers/molit-transactions";
 
 export type KaptCodeResolverApartment = {
@@ -57,21 +58,20 @@ export function resolveKaptCodeCandidate({
   transactions: KaptCodeResolverTransaction[];
   candidates: KaptApartmentListItem[];
 }): KaptCodeResolution {
-  const filteredCandidates = filterCandidatesByLawd(candidates, apartment.lawd_cd);
-
   if (candidates.length === 0) {
     return {
       status: "none",
       selected: null,
       candidates: [],
-      reason: "법정동코드에 맞는 K-apt 후보를 찾지 못했습니다.",
+      reason: "K-apt 후보 목록이 비어 있습니다.",
     };
   }
 
+  const filteredCandidates = filterCandidatesByLawd(candidates, apartment.lawd_cd);
   const nameHints = getNameHints(apartment, aliases, transactions);
   const addressHints = getAddressHints(apartment, transactions);
-  const isLawdFiltered = filteredCandidates.length > 0;
-  const candidatesToScore = isLawdFiltered ? filteredCandidates : candidates;
+  const candidatesToScore =
+    filteredCandidates.length > 0 ? filteredCandidates : candidates;
   const scoredCandidates = candidatesToScore
     .map((candidate) =>
       scoreCandidate(candidate, {
@@ -111,7 +111,7 @@ export function resolveKaptCodeCandidate({
     status: "needs_selection",
     selected: null,
     candidates: scoredCandidates,
-    reason: "K-apt 후보가 여러 개이거나 확신이 낮아 선택이 필요합니다.",
+    reason: "K-apt 후보가 여러 개이거나 확신할 수 없어 선택이 필요합니다.",
   };
 }
 
@@ -165,15 +165,10 @@ function scoreCandidate(
     reasons.push("단지명 후보");
   }
 
-  if (
-    context.addressHints.some(
-      (hint) =>
-        candidate.eupmyeondong?.includes(hint) ||
-        candidate.ri?.includes(hint) ||
-        Boolean(candidate.eupmyeondong && hint.includes(candidate.eupmyeondong)),
-    )
-  ) {
-    score += 10;
+  const addressScore = scoreAddressEvidence(candidate, context.addressHints);
+
+  if (addressScore > 0) {
+    score += addressScore;
     reasons.push("주소 단서 일치");
   }
 
@@ -184,15 +179,45 @@ function scoreCandidate(
   };
 }
 
+function scoreAddressEvidence(
+  candidate: KaptApartmentListItem,
+  addressHints: string[],
+) {
+  const candidateText = normalizeAddressText(
+    [
+      candidate.sido,
+      candidate.sigungu,
+      candidate.eupmyeondong,
+      candidate.ri,
+      candidate.legalAddress,
+      candidate.roadAddress,
+    ].join(" "),
+  );
+  let matchCount = 0;
+
+  for (const hint of addressHints) {
+    if (candidateText.includes(normalizeAddressText(hint))) {
+      matchCount += 1;
+    }
+  }
+
+  return Math.min(matchCount * 8, 24);
+}
+
 function shouldAutoSelect(
   top: ScoredKaptCodeCandidate,
   second: ScoredKaptCodeCandidate | undefined,
   candidateCount: number,
 ) {
-  const hasNameEvidence = top.reasons.some((reason) => reason.startsWith("단지명"));
-  const hasLawdEvidence = top.reasons.some((reason) => reason.includes("코드 일치"));
+  const hasNameEvidence = top.reasons.some((reason) => reason.includes("단지명"));
+  const hasLocationEvidence = top.reasons.some(
+    (reason) =>
+      reason.includes("법정동") ||
+      reason.includes("시군구") ||
+      reason.includes("주소"),
+  );
 
-  if (!hasNameEvidence || !hasLawdEvidence) {
+  if (!hasNameEvidence || !hasLocationEvidence) {
     return false;
   }
 
@@ -228,7 +253,38 @@ function getAddressHints(
     new Set(
       [apartment.address, apartment.road_address]
         .concat(transactions.map((transaction) => transaction.address_from_source))
-        .flatMap((value) => value?.match(/[가-힣]+동|[가-힣]+읍|[가-힣]+면|[가-힣]+리/g) ?? []),
+        .flatMap(getAddressTokens),
     ),
   );
+}
+
+function getAddressTokens(value: string | null | undefined) {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(/[^\p{L}\p{N}]+/gu)
+    .map((token) => token.trim())
+    .filter(isUsefulAddressToken);
+}
+
+function isUsefulAddressToken(token: string) {
+  const normalized = normalizeAddressText(token);
+  const stopWords = new Set([
+    "서울",
+    "서울특별시",
+    "seoul",
+    "특별시",
+    "광역시",
+    "경기도",
+    "apt",
+    "apartment",
+  ]);
+
+  return normalized.length >= 2 && !stopWords.has(normalized);
+}
+
+function normalizeAddressText(value: string) {
+  return normalizeApartmentNameForMolit(value);
 }

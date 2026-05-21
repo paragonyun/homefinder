@@ -146,4 +146,35 @@ describe("resolveKaptCodeCandidate", () => {
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0].kaptCode).toBe("A11560132");
   });
+
+  it("uses road-address evidence when K-apt directory rows include road addresses", () => {
+    const result = resolveKaptCodeCandidate({
+      apartment: {
+        name: "Dong-A 3",
+        display_name: null,
+        address: "Seoul Yangcheon-ro 731",
+        road_address: null,
+        lawd_cd: "11500",
+      },
+      aliases: [],
+      transactions: [],
+      candidates: [
+        {
+          kaptCode: "A11500101",
+          kaptName: "Dong-A 3",
+          bjdCode: null,
+          sido: "Seoul",
+          sigungu: "Gangseo-gu",
+          eupmyeondong: "Yeomchang-dong",
+          ri: null,
+          legalAddress: "Seoul Gangseo-gu Yeomchang-dong Dong-A 3",
+          roadAddress: "Seoul Yangcheon-ro 731",
+        },
+      ],
+    });
+
+    expect(result.status).toBe("needs_selection");
+    expect(result.candidates[0].kaptCode).toBe("A11500101");
+    expect(result.candidates[0].reasons).toContain("주소 단서 일치");
+  });
 });

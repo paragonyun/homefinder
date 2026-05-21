@@ -88,3 +88,7 @@
 - [ ] 실거래가와 시세 혼동 금지
 - [ ] 데이터 출처 없는 숫자 표시 금지
 - [ ] Portfolio Watchdog 코드 혼합 금지
+
+## 사용자 직접 작업
+
+- [ ] Supabase SQL Editor에 `supabase/migrations/20260521000100_kapt_code_directory.sql` 적용

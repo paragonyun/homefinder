@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f8f4;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #020617;
 }
 
 @theme inline {
@@ -18,4 +18,10 @@ body {
     "Malgun Gothic",
     "Apple SD Gothic Neo",
     sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
 }

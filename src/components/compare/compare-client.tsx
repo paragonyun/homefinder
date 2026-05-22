@@ -5,8 +5,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { StatusPill } from "@/components/ui/status-pill";
-import { apartments as mockApartments } from "@/lib/mock-data";
+import { apartments as mockApartments, statusLabels } from "@/lib/mock-data";
 import { buildApartmentComparisonRows } from "@/lib/services/apartment-comparison";
+import {
+  filterComparisonRows,
+  getComparisonMetrics,
+  hasBasicInfo,
+  needsSync,
+  type ComparisonDataFilter,
+  type ComparisonStatusFilter,
+} from "@/lib/services/comparison-view";
 import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -26,6 +34,10 @@ export function CompareClient() {
   const [basicInfos, setBasicInfos] = useState<ApartmentBasicInfoRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<ComparisonStatusFilter>("all");
+  const [dataFilter, setDataFilter] = useState<ComparisonDataFilter>("all");
   const supabase = createSupabaseBrowserClient();
 
   const loadData = useCallback(async () => {
@@ -147,12 +159,16 @@ export function CompareClient() {
     () => buildApartmentComparisonRows(apartments, transactions, basicInfos),
     [apartments, transactions, basicInfos],
   );
-  const rowsWithTransactions = rows.filter(
-    (row) => row.transactionCount > 0,
-  ).length;
-  const rowsWithBasicInfo = rows.filter(
-    (row) => row.basicInfoFetchedAt !== null,
-  ).length;
+  const filteredRows = useMemo(
+    () =>
+      filterComparisonRows(rows, {
+        query,
+        status: statusFilter,
+        data: dataFilter,
+      }),
+    [dataFilter, query, rows, statusFilter],
+  );
+  const metrics = useMemo(() => getComparisonMetrics(rows), [rows]);
 
   if (!isSupabaseConfigured) {
     return (
@@ -186,21 +202,75 @@ export function CompareClient() {
       ) : null}
 
       {session ? (
-        <section className="rounded-lg border border-slate-200 bg-white">
-          <div className="flex flex-col gap-3 border-b border-slate-200 p-5 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold tracking-normal text-slate-950">
-                단지 비교표
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                등록한 단지의 국토부 실거래가와 K-apt 세대수, 주차, 사용승인일을
-                함께 비교합니다.
-              </p>
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 p-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                  Compare
+                </p>
+                <h2 className="mt-1 text-2xl font-semibold tracking-normal text-slate-950">
+                  단지 비교
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  등록한 단지의 실거래가, K-apt 세대수, 주차, 사용승인일을
+                  같은 기준으로 비교합니다.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+                <Metric label="등록 단지" value={`${metrics.total}개`} />
+                <Metric label="가격 데이터" value={`${metrics.withPrice}개`} />
+                <Metric label="K-apt 정보" value={`${metrics.withKapt}개`} />
+                <Metric label="동기화 필요" value={`${metrics.needsSync}개`} />
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-sm">
-              <Metric label="등록 단지" value={`${rows.length}개`} />
-              <Metric label="가격 데이터" value={`${rowsWithTransactions}개`} />
-              <Metric label="K-apt 정보" value={`${rowsWithBasicInfo}개`} />
+
+            <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_180px]">
+              <label className="grid gap-1 text-xs font-semibold text-slate-500">
+                검색
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="단지명, 주소, 메모, 법정동코드"
+                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-500">
+                상태
+                <select
+                  value={statusFilter}
+                  onChange={(event) =>
+                    setStatusFilter(
+                      event.target.value as ComparisonStatusFilter,
+                    )
+                  }
+                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                >
+                  <option value="all">전체</option>
+                  {Object.entries(statusLabels).map(([status, label]) => (
+                    <option key={status} value={status}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-500">
+                데이터
+                <select
+                  value={dataFilter}
+                  onChange={(event) =>
+                    setDataFilter(event.target.value as ComparisonDataFilter)
+                  }
+                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                >
+                  <option value="all">전체</option>
+                  <option value="has-price">가격 있음</option>
+                  <option value="missing-price">가격 없음</option>
+                  <option value="has-kapt">K-apt 있음</option>
+                  <option value="missing-kapt">K-apt 없음</option>
+                  <option value="needs-sync">동기화 필요</option>
+                </select>
+              </label>
             </div>
           </div>
 
@@ -209,7 +279,18 @@ export function CompareClient() {
               비교 데이터를 불러오는 중입니다.
             </p>
           ) : rows.length > 0 ? (
-            <ComparisonTable rows={rows} />
+            <div>
+              <div className="border-b border-slate-200 px-5 py-3 text-sm text-slate-600">
+                {filteredRows.length}개 단지가 표시됩니다.
+              </div>
+              {filteredRows.length > 0 ? (
+                <ComparisonMatrix rows={filteredRows} />
+              ) : (
+                <p className="p-5 text-sm leading-6 text-slate-600">
+                  현재 필터 조건에 맞는 단지가 없습니다.
+                </p>
+              )}
+            </div>
           ) : (
             <div className="grid gap-3 p-5 text-sm leading-6 text-slate-600">
               <p>아직 등록한 관심 단지가 없습니다.</p>
@@ -227,29 +308,34 @@ export function CompareClient() {
   );
 }
 
-function ComparisonTable({
+function ComparisonMatrix({
   rows,
 }: Readonly<{
   rows: ReturnType<typeof buildApartmentComparisonRows>;
 }>) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[1120px] text-left">
-        <thead className="bg-slate-50 text-sm text-slate-600">
+    <>
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="w-full min-w-[1080px] text-left">
+          <thead className="sticky top-[74px] z-10 bg-slate-50 text-xs uppercase tracking-[0.08em] text-slate-500">
           <tr>
-            <th className="px-4 py-3 font-semibold">단지</th>
+            <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3 font-semibold">
+              단지
+            </th>
             <th className="px-4 py-3 font-semibold">상태</th>
             <th className="px-4 py-3 font-semibold">최근 실거래가</th>
             <th className="px-4 py-3 font-semibold">평형대 요약</th>
             <th className="px-4 py-3 font-semibold">K-apt 기본정보</th>
-            <th className="px-4 py-3 font-semibold">법정동코드</th>
-            <th className="px-4 py-3 font-semibold">메모</th>
+            <th className="px-4 py-3 font-semibold">데이터 상태</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} className="border-b border-slate-200 last:border-0">
-              <td className="px-4 py-4 align-top">
+            <tr
+              key={row.id}
+              className="border-b border-slate-200 text-sm last:border-0 hover:bg-slate-50/60"
+            >
+              <td className="sticky left-0 bg-white px-5 py-4 align-top shadow-[1px_0_0_#e2e8f0]">
                 <Link
                   href={`/apartments/${row.id}`}
                   className="font-semibold text-slate-950 hover:text-emerald-800"
@@ -258,6 +344,9 @@ function ComparisonTable({
                 </Link>
                 <p className="mt-1 max-w-64 text-xs leading-5 text-slate-500">
                   {row.address ?? "주소 미입력"}
+                </p>
+                <p className="mt-2 text-xs text-slate-400">
+                  법정동코드 {row.lawdCd ?? "-"}
                 </p>
               </td>
               <td className="px-4 py-4 align-top">
@@ -282,12 +371,18 @@ function ComparisonTable({
                 {row.areaSummaries.length > 0 ? (
                   <div className="grid gap-1">
                     {row.areaSummaries.slice(0, 3).map((summary) => (
-                      <p key={summary.areaBucket}>
-                        {summary.areaBucket}㎡대 · 최근{" "}
-                        {formatKrw(summary.latestPriceKrw)} · 평균{" "}
-                        {formatKrw(summary.averagePriceKrw)} ·{" "}
-                        {summary.transactionCount}건
-                      </p>
+                      <div
+                        key={summary.areaBucket}
+                        className="rounded-md border border-slate-200 bg-white px-2.5 py-2"
+                      >
+                        <p className="font-semibold text-slate-950">
+                          {summary.areaBucket}㎡대 {formatKrw(summary.latestPriceKrw)}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          평균 {formatKrw(summary.averagePriceKrw)} ·{" "}
+                          {summary.transactionCount}건
+                        </p>
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -297,17 +392,68 @@ function ComparisonTable({
               <td className="px-4 py-4 align-top text-sm text-slate-700">
                 <BasicInfoSummary row={row} />
               </td>
-              <td className="px-4 py-4 align-top text-sm text-slate-700">
-                {row.lawdCd ?? "-"}
-              </td>
               <td className="px-4 py-4 align-top text-sm leading-6 text-slate-700">
-                {row.memo ?? "-"}
+                <DataQuality row={row} />
+                {row.memo ? (
+                  <p className="mt-3 max-w-72 text-xs text-slate-500">
+                    {row.memo}
+                  </p>
+                ) : null}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+      <div className="grid gap-3 p-4 lg:hidden">
+        {rows.map((row) => (
+          <article
+            key={row.id}
+            className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Link
+                  href={`/apartments/${row.id}`}
+                  className="font-semibold text-slate-950"
+                >
+                  {row.name}
+                </Link>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {row.address ?? "주소 미입력"}
+                </p>
+              </div>
+              <StatusPill status={row.status} />
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+              <MiniMetric
+                label="최근가"
+                value={
+                  row.latestPriceKrw !== null
+                    ? formatKrw(row.latestPriceKrw)
+                    : "수집 전"
+                }
+              />
+              <MiniMetric
+                label="거래"
+                value={`${row.transactionCount.toLocaleString("ko-KR")}건`}
+              />
+              <MiniMetric
+                label="세대"
+                value={formatOptionalCount(row.householdCount, "세대")}
+              />
+              <MiniMetric
+                label="주차"
+                value={formatOptionalCount(row.parkingCount, "대")}
+              />
+            </div>
+            <div className="mt-4">
+              <DataQuality row={row} />
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -316,12 +462,7 @@ function BasicInfoSummary({
 }: Readonly<{
   row: ReturnType<typeof buildApartmentComparisonRows>[number];
 }>) {
-  const hasBasicInfo =
-    row.householdCount !== null ||
-    row.parkingCount !== null ||
-    row.approvalDate !== null;
-
-  if (!hasBasicInfo) {
+  if (!hasBasicInfo(row)) {
     return <span className="text-slate-500">K-apt 정보 없음</span>;
   }
 
@@ -339,6 +480,62 @@ function BasicInfoSummary({
           갱신 {formatDate(row.basicInfoFetchedAt)}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function DataQuality({
+  row,
+}: Readonly<{
+  row: ReturnType<typeof buildApartmentComparisonRows>[number];
+}>) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <QualityBadge
+        tone={row.transactionCount > 0 ? "good" : "missing"}
+        label={row.transactionCount > 0 ? "가격 있음" : "가격 필요"}
+      />
+      <QualityBadge
+        tone={hasBasicInfo(row) ? "good" : "missing"}
+        label={hasBasicInfo(row) ? "K-apt 있음" : "K-apt 필요"}
+      />
+      {needsSync(row) ? (
+        <QualityBadge tone="warn" label="동기화 필요" />
+      ) : (
+        <QualityBadge tone="good" label="비교 가능" />
+      )}
+    </div>
+  );
+}
+
+function QualityBadge({
+  label,
+  tone,
+}: Readonly<{ label: string; tone: "good" | "warn" | "missing" }>) {
+  const className =
+    tone === "good"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : tone === "warn"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-slate-200 bg-slate-50 text-slate-600";
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function MiniMetric({
+  label,
+  value,
+}: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 font-semibold text-slate-950">{value}</p>
     </div>
   );
 }

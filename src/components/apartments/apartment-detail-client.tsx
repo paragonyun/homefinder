@@ -8,6 +8,10 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { apartments as mockApartments } from "@/lib/mock-data";
 import {
+  buildLinearTicks,
+  getVisibleMonthLabels,
+} from "@/lib/services/chart-scale";
+import {
   buildMonthlyPriceTrendLines,
   summarizeApartmentPrices,
   type MonthlyPriceTrendLine,
@@ -426,112 +430,49 @@ export function ApartmentDetailClient({
     () => buildMonthlyPriceTrendLines(priceSummary.monthlyTrend),
     [priceSummary.monthlyTrend],
   );
+  const latestSummary = priceSummary.areaSummaries[0] ?? null;
+  const totalTransactionCount = priceSummary.areaSummaries.reduce(
+    (sum, summary) => sum + summary.transactionCount,
+    0,
+  );
+  const hasAnySyncInProgress =
+    isComprehensiveSyncing || isSyncing || isBasicInfoSyncing;
 
   return (
     <div className="grid gap-5">
       {!mockApartment ? <AuthPanel /> : null}
 
       {!mockApartment && (!isSupabaseConfigured || !session) ? (
-        <p className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
+        <p className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600 shadow-sm">
           실제 등록 단지 상세를 보려면 Supabase 환경변수와 로그인이 필요합니다.
         </p>
       ) : null}
 
-      {message ? (
-        <p className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-          {message}
-        </p>
-      ) : null}
-
-      {candidateNames.length > 0 ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p className="font-semibold">국토부 원천명 후보</p>
-          <p className="mt-1 leading-6">
-            아래 이름을 단지 수정 화면의 국토부 원천 단지명 alias에 추가한 뒤 다시
-            동기화하세요.
-          </p>
-          <ul className="mt-2 grid gap-1">
-            {candidateNames.map((candidate) => (
-              <li key={candidate.name}>
-                {candidate.name} ({candidate.count}건)
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {kaptCodeCandidates.length > 0 ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-          <p className="font-semibold">K-apt 코드 후보</p>
-          <p className="mt-1 leading-6">
-            후보가 여러 개라 자동 저장하지 않았습니다. 실제 단지와 일치하는 항목을
-            선택하면 K-apt 기본정보 조회까지 이어집니다.
-          </p>
-          <ul className="mt-3 grid gap-2">
-            {kaptCodeCandidates.map((candidate) => (
-              <li
-                key={candidate.kaptCode}
-                className="flex flex-col gap-2 rounded-md border border-emerald-200 bg-white p-3 md:flex-row md:items-center md:justify-between"
-              >
-                <div>
-                  <p className="font-semibold text-slate-950">
-                    {candidate.kaptName} · {candidate.kaptCode}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-slate-600">
-                    {[candidate.sido, candidate.sigungu, candidate.eupmyeondong, candidate.ri]
-                      .filter(Boolean)
-                      .join(" ")}
-                    {candidate.bjdCode ? ` · ${candidate.bjdCode}` : ""}
-                  </p>
-                  {candidate.roadAddress || candidate.legalAddress ? (
-                    <p className="mt-1 text-xs leading-5 text-slate-600">
-                      {candidate.roadAddress ?? candidate.legalAddress}
-                    </p>
-                  ) : null}
-                  <p className="mt-1 text-xs text-slate-500">
-                    {candidate.reasons.join(", ") || "후보"} · 점수{" "}
-                    {candidate.score}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleSelectKaptCandidate(candidate.kaptCode)}
-                  disabled={isComprehensiveSyncing || !isAdmin}
-                  className="w-fit rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:bg-slate-400"
-                >
-                  이 코드 선택
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-normal text-slate-950">
-              {title ?? "단지 정보 없음"}
-            </h1>
-            <p className="mt-2 text-sm text-slate-600">{address}</p>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-700">
-              {memo}
-            </p>
-          </div>
-          <div className="flex flex-col items-start gap-3 md:items-end">
-            <StatusPill status={status} />
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 bg-gradient-to-b from-white to-slate-50 px-5 py-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill status={status} />
+                <DataBadge label={`법정동 ${apartment?.lawd_cd ?? "미입력"}`} />
+                <DataBadge label={`K-apt ${apartment?.kapt_code ?? "미입력"}`} />
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-normal text-slate-950">
+                {title ?? "단지 정보 없음"}
+              </h1>
+              <p className="mt-2 text-sm text-slate-600">{address}</p>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-700">
+                {memo}
+              </p>
+            </div>
             {!mockApartment && session ? (
               <button
                 type="button"
                 onClick={() => void handleComprehensiveSync()}
                 disabled={
-                  isComprehensiveSyncing ||
-                  isSyncing ||
-                  isBasicInfoSyncing ||
-                  !apartment?.lawd_cd ||
-                  !isAdmin
+                  hasAnySyncInProgress || !apartment?.lawd_cd || !isAdmin
                 }
-                className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+                className="h-11 rounded-md bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:bg-slate-300"
               >
                 {isComprehensiveSyncing
                   ? "종합 조회 중"
@@ -539,10 +480,60 @@ export function ApartmentDetailClient({
               </button>
             ) : null}
           </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <HeroMetric
+              label="최근 실거래가"
+              value={
+                latestSummary ? formatKrw(latestSummary.latestPriceKrw) : "수집 전"
+              }
+              detail={
+                latestSummary
+                  ? `${formatDate(latestSummary.latestDealDate)} · ${latestSummary.areaBucket}㎡대`
+                  : "국토부 동기화 필요"
+              }
+            />
+            <HeroMetric
+              label="저장 거래"
+              value={`${totalTransactionCount.toLocaleString("ko-KR")}건`}
+              detail="취소 거래 제외"
+            />
+            <HeroMetric
+              label="세대수"
+              value={formatOptionalCount(basicInfo?.household_count ?? null, "세대")}
+              detail={basicInfo ? "K-apt 기준" : "기본정보 필요"}
+            />
+            <HeroMetric
+              label="주차"
+              value={formatOptionalCount(basicInfo?.parking_count ?? null, "대")}
+              detail={basicInfo ? "총 주차대수" : "기본정보 필요"}
+            />
+            <HeroMetric
+              label="사용승인"
+              value={basicInfo?.approval_date ? formatDate(basicInfo.approval_date) : "-"}
+              detail="K-apt 기본정보"
+            />
+            <HeroMetric
+              label="정보 갱신"
+              value={basicInfo?.fetched_at ? formatDate(basicInfo.fetched_at) : "-"}
+              detail="최근 K-apt 반영"
+            />
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5">
+      {message || candidateNames.length > 0 || kaptCodeCandidates.length > 0 ? (
+        <SyncStatusPanel
+          message={message}
+          candidateNames={candidateNames}
+          kaptCodeCandidates={kaptCodeCandidates}
+          isSelecting={isComprehensiveSyncing}
+          canSelect={isAdmin}
+          onSelectCandidate={handleSelectKaptCandidate}
+        />
+      ) : null}
+
+      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-normal text-slate-950">
@@ -567,7 +558,7 @@ export function ApartmentDetailClient({
                   !apartment?.kapt_code ||
                   !isAdmin
                 }
-                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-300"
               >
                 {isBasicInfoSyncing ? "조회 중" : "K-apt 기본정보 불러오기"}
               </button>
@@ -630,7 +621,7 @@ export function ApartmentDetailClient({
         )}
       </section>
 
-      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5">
+      <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-normal text-slate-950">
@@ -655,7 +646,7 @@ export function ApartmentDetailClient({
                   !apartment?.lawd_cd ||
                   !isAdmin
                 }
-                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-300"
               >
                 {isSyncing ? "조회 중" : "최근 실거래가 불러오기"}
               </button>
@@ -679,7 +670,7 @@ export function ApartmentDetailClient({
               {priceSummary.areaSummaries.map((summary) => (
                 <article
                   key={summary.areaBucket}
-                  className="rounded-md border border-slate-200 bg-slate-50 p-4"
+                  className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -697,7 +688,7 @@ export function ApartmentDetailClient({
                         ㎡
                       </p>
                     </div>
-                    <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-600">
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
                       {summary.transactionCount}건
                     </span>
                   </div>
@@ -732,7 +723,7 @@ export function ApartmentDetailClient({
             </div>
 
             {trendLines.length > 0 ? (
-              <div className="rounded-md border border-slate-200 bg-white p-4">
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-slate-950">
@@ -811,36 +802,206 @@ export function ApartmentDetailClient({
         )}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        {sections.map(([sectionTitle, body]) => (
-          <article
-            key={sectionTitle}
-            className="rounded-lg border border-slate-200 bg-white p-5"
-          >
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
             <h2 className="text-lg font-semibold tracking-normal text-slate-950">
-              {sectionTitle}
+              다음 리서치 항목
             </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
-          </article>
-        ))}
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              아직 자동화되지 않은 항목은 접힌 목록으로만 유지합니다.
+            </p>
+          </div>
+          <Link
+            href={`/field-notes/${apartmentId}`}
+            className="w-fit rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
+          >
+            임장 메모 열기
+          </Link>
+        </div>
+        <div className="mt-4 grid gap-2">
+          {sections.map(([sectionTitle, body]) => (
+            <details
+              key={sectionTitle}
+              className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3"
+            >
+              <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                {sectionTitle}
+              </summary>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+            </details>
+          ))}
+        </div>
       </section>
-
-      <Link
-        href={`/field-notes/${apartmentId}`}
-        className="w-fit rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
-      >
-        임장 메모 열기
-      </Link>
     </div>
   );
 }
 
 const PRICE_TREND_COLORS = ["#0f766e", "#2563eb", "#b45309", "#be123c"];
 
+function DataBadge({ label }: Readonly<{ label: string }>) {
+  return (
+    <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-sm">
+      {label}
+    </span>
+  );
+}
+
+function HeroMetric({
+  detail,
+  label,
+  value,
+}: Readonly<{ detail: string; label: string; value: string }>) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-2 truncate text-lg font-semibold text-slate-950">
+        {value}
+      </p>
+      <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
+    </div>
+  );
+}
+
+function SyncStatusPanel({
+  canSelect,
+  candidateNames,
+  isSelecting,
+  kaptCodeCandidates,
+  message,
+  onSelectCandidate,
+}: Readonly<{
+  canSelect: boolean;
+  candidateNames: Array<{ name: string; count: number }>;
+  isSelecting: boolean;
+  kaptCodeCandidates: KaptCodeCandidate[];
+  message: string | null;
+  onSelectCandidate: (kaptCode: string) => void | Promise<void>;
+}>) {
+  return (
+    <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Sync status
+          </p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-950">
+            데이터 조회 상태
+          </h2>
+        </div>
+        {isSelecting ? (
+          <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+            처리 중
+          </span>
+        ) : null}
+      </div>
+
+      {message ? (
+        <p className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+          {message}
+        </p>
+      ) : null}
+
+      {candidateNames.length > 0 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">국토부 원천명 후보</p>
+          <p className="mt-1 leading-6">
+            단지명 매칭이 애매합니다. 필요한 경우 단지 수정 화면에서 alias를
+            추가한 뒤 다시 동기화하세요.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {candidateNames.map((candidate) => (
+              <span
+                key={candidate.name}
+                className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold"
+              >
+                {candidate.name} · {candidate.count}건
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {kaptCodeCandidates.length > 0 ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold">K-apt 코드 후보 선택 필요</p>
+              <p className="mt-1 text-emerald-900">
+                실제 단지와 일치하는 항목을 선택하면 기본정보 조회까지 이어집니다.
+              </p>
+            </div>
+            <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-800">
+              {kaptCodeCandidates.length}개 후보
+            </span>
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="text-xs uppercase tracking-[0.08em] text-emerald-900/70">
+                <tr>
+                  <th className="py-2 pr-3 font-semibold">단지명</th>
+                  <th className="py-2 pr-3 font-semibold">주소</th>
+                  <th className="py-2 pr-3 font-semibold">매칭 근거</th>
+                  <th className="py-2 pr-3 font-semibold">점수</th>
+                  <th className="py-2 font-semibold">선택</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kaptCodeCandidates.map((candidate) => (
+                  <tr
+                    key={candidate.kaptCode}
+                    className="border-t border-emerald-200/80"
+                  >
+                    <td className="py-3 pr-3 align-top">
+                      <p className="font-semibold text-slate-950">
+                        {candidate.kaptName}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {candidate.kaptCode}
+                      </p>
+                    </td>
+                    <td className="py-3 pr-3 align-top text-slate-700">
+                      {formatCandidateAddress(candidate) || "-"}
+                    </td>
+                    <td className="py-3 pr-3 align-top text-slate-700">
+                      {candidate.reasons.join(", ") || "후보"}
+                    </td>
+                    <td className="py-3 pr-3 align-top font-semibold text-slate-950">
+                      {candidate.score}
+                    </td>
+                    <td className="py-3 align-top">
+                      <button
+                        type="button"
+                        onClick={() => void onSelectCandidate(candidate.kaptCode)}
+                        disabled={isSelecting || !canSelect}
+                        className="rounded-md bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:bg-slate-300"
+                      >
+                        선택
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function PriceTrendLineChart({
   lines,
 }: Readonly<{ lines: MonthlyPriceTrendLine[] }>) {
-  const chartPoints = lines.flatMap((line) =>
+  const [hiddenAreaBuckets, setHiddenAreaBuckets] = useState<string[]>([]);
+  const availableAreaBuckets = new Set(lines.map((line) => line.areaBucket));
+  const effectiveHiddenAreaBuckets = hiddenAreaBuckets.filter((areaBucket) =>
+    availableAreaBuckets.has(areaBucket),
+  );
+  const visibleLines = lines.filter(
+    (line) => !effectiveHiddenAreaBuckets.includes(line.areaBucket),
+  );
+  const chartPoints = visibleLines.flatMap((line) =>
     line.points.map((point) => ({
       ...point,
       areaBucket: line.areaBucket,
@@ -848,18 +1009,36 @@ function PriceTrendLineChart({
   );
 
   if (chartPoints.length === 0) {
-    return null;
+    return (
+      <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
+        표시할 평형대를 선택하세요.
+      </div>
+    );
   }
 
   const months = Array.from(new Set(chartPoints.map((point) => point.month))).sort();
   const prices = chartPoints.map((point) => point.averagePriceKrw);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
-  const width = 680;
-  const height = 260;
-  const paddingX = 56;
-  const paddingTop = 24;
-  const paddingBottom = 42;
+  const width = 920;
+  const height = 360;
+  const paddingLeft = 88;
+  const paddingRight = 36;
+  const paddingTop = 32;
+  const paddingBottom = 54;
+  const yAxisPrices = buildLinearTicks(minPrice, maxPrice, 5);
+  const scaleMin = Math.min(...yAxisPrices, minPrice);
+  const scaleMax = Math.max(...yAxisPrices, maxPrice);
+  const visibleMonthLabels = getVisibleMonthLabels(months, 6);
+  const latestPoint = [...chartPoints].sort((left, right) =>
+    right.month.localeCompare(left.month),
+  )[0];
+  const highestPoint = chartPoints.reduce((current, point) =>
+    point.averagePriceKrw > current.averagePriceKrw ? point : current,
+  );
+  const lowestPoint = chartPoints.reduce((current, point) =>
+    point.averagePriceKrw < current.averagePriceKrw ? point : current,
+  );
 
   const getX = (month: string) => {
     if (months.length === 1) {
@@ -867,49 +1046,76 @@ function PriceTrendLineChart({
     }
 
     return (
-      paddingX +
-      (months.indexOf(month) / (months.length - 1)) * (width - paddingX * 2)
+      paddingLeft +
+      (months.indexOf(month) / (months.length - 1)) *
+        (width - paddingLeft - paddingRight)
     );
   };
   const getY = (price: number) => {
-    if (minPrice === maxPrice) {
+    if (scaleMin === scaleMax) {
       return (height - paddingBottom + paddingTop) / 2;
     }
 
     return (
       height -
       paddingBottom -
-      ((price - minPrice) / (maxPrice - minPrice)) *
+      ((price - scaleMin) / (scaleMax - scaleMin)) *
         (height - paddingTop - paddingBottom)
     );
   };
-  const visibleMonthLabels =
-    months.length <= 6
-      ? months
-      : months.filter(
-          (_month, index) => index === 0 || index === months.length - 1,
-        );
-  const yAxisPrices = Array.from(new Set([minPrice, maxPrice]));
+  const toggleAreaBucket = (areaBucket: string) => {
+    setHiddenAreaBuckets((current) => {
+      const validCurrent = current.filter((item) =>
+        availableAreaBuckets.has(item),
+      );
+
+      if (validCurrent.includes(areaBucket)) {
+        return validCurrent.filter((item) => item !== areaBucket);
+      }
+
+      const visibleCount = lines.length - validCurrent.length;
+
+      return visibleCount <= 1 ? validCurrent : [...validCurrent, areaBucket];
+    });
+  };
 
   return (
     <div className="mt-4">
-      <div className="overflow-x-auto">
+      <div className="mb-4 grid gap-2 sm:grid-cols-3">
+        <ChartStat
+          label="최신"
+          value={formatKrw(latestPoint.averagePriceKrw)}
+          detail={`${latestPoint.month} · ${latestPoint.areaBucket}㎡대`}
+        />
+        <ChartStat
+          label="최고"
+          value={formatKrw(highestPoint.averagePriceKrw)}
+          detail={`${highestPoint.month} · ${highestPoint.areaBucket}㎡대`}
+        />
+        <ChartStat
+          label="최저"
+          value={formatKrw(lowestPoint.averagePriceKrw)}
+          detail={`${lowestPoint.month} · ${lowestPoint.areaBucket}㎡대`}
+        />
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-3">
         <svg
           role="img"
           aria-label="월별 평균 실거래가 line chart"
-          className="min-w-[620px]"
+          className="min-w-[760px]"
           viewBox={`0 0 ${width} ${height}`}
         >
+          <rect width={width} height={height} rx="12" fill="#ffffff" />
           <line
-            x1={paddingX}
-            x2={width - paddingX}
+            x1={paddingLeft}
+            x2={width - paddingRight}
             y1={height - paddingBottom}
             y2={height - paddingBottom}
             stroke="#cbd5e1"
           />
           <line
-            x1={paddingX}
-            x2={paddingX}
+            x1={paddingLeft}
+            x2={paddingLeft}
             y1={paddingTop}
             y2={height - paddingBottom}
             stroke="#cbd5e1"
@@ -917,14 +1123,15 @@ function PriceTrendLineChart({
           {yAxisPrices.map((price) => (
             <g key={price}>
               <line
-                x1={paddingX}
-                x2={width - paddingX}
+                x1={paddingLeft}
+                x2={width - paddingRight}
                 y1={getY(price)}
                 y2={getY(price)}
                 stroke="#e2e8f0"
+                strokeDasharray="4 4"
               />
               <text
-                x={paddingX - 10}
+                x={paddingLeft - 12}
                 y={getY(price) + 4}
                 fill="#64748b"
                 fontSize="11"
@@ -949,6 +1156,12 @@ function PriceTrendLineChart({
           {lines.map((line, lineIndex) => {
             const color =
               PRICE_TREND_COLORS[lineIndex % PRICE_TREND_COLORS.length];
+            const isHidden = effectiveHiddenAreaBuckets.includes(line.areaBucket);
+
+            if (isHidden) {
+              return null;
+            }
+
             const path = line.points
               .map(
                 (point, pointIndex) =>
@@ -968,15 +1181,19 @@ function PriceTrendLineChart({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth="3"
+                    strokeDasharray={line.isSparse ? "8 7" : undefined}
                   />
                 ) : null}
-                {line.points.map((point) => (
+                {line.points.map((point, pointIndex) => {
+                  const isLatest = pointIndex === line.points.length - 1;
+
+                  return (
                   <circle
                     key={`${line.areaBucket}-${point.month}`}
                     cx={getX(point.month)}
                     cy={getY(point.averagePriceKrw)}
                     fill="#ffffff"
-                    r="4"
+                    r={isLatest ? "6" : "4"}
                     stroke={color}
                     strokeWidth="3"
                   >
@@ -986,7 +1203,8 @@ function PriceTrendLineChart({
                       건)
                     </title>
                   </circle>
-                ))}
+                  );
+                })}
               </g>
             );
           })}
@@ -994,9 +1212,15 @@ function PriceTrendLineChart({
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
         {lines.map((line, index) => (
-          <span
+          <button
+            type="button"
             key={line.areaBucket}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-200 px-2 py-1"
+            onClick={() => toggleAreaBucket(line.areaBucket)}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-semibold transition ${
+              effectiveHiddenAreaBuckets.includes(line.areaBucket)
+                ? "border-slate-200 bg-white text-slate-400"
+                : "border-slate-200 bg-white text-slate-700 shadow-sm"
+            }`}
           >
             <span
               className="h-2.5 w-2.5 rounded-full"
@@ -1006,9 +1230,23 @@ function PriceTrendLineChart({
               }}
             />
             {line.areaBucket}㎡대 · {line.totalTransactionCount}건
-          </span>
+          </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ChartStat({
+  detail,
+  label,
+  value,
+}: Readonly<{ detail: string; label: string; value: string }>) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-950">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{detail}</p>
     </div>
   );
 }
@@ -1058,6 +1296,16 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "요청 처리에 실패했습니다.";
 }
 
+function formatCandidateAddress(candidate: KaptCodeCandidate) {
+  return (
+    candidate.roadAddress ??
+    candidate.legalAddress ??
+    [candidate.sido, candidate.sigungu, candidate.eupmyeondong, candidate.ri]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
 function formatOptionalCount(value: number | null, suffix: string) {
   return value !== null ? `${value.toLocaleString("ko-KR")}${suffix}` : "-";
 }
@@ -1071,7 +1319,7 @@ function BasicInfoItem({
   value,
 }: Readonly<{ label: string; value: string }>) {
   return (
-    <dl className="rounded-md border border-slate-200 bg-slate-50 p-4">
+    <dl className="rounded-lg border border-slate-200 bg-slate-50 p-4">
       <dt className="text-xs font-semibold text-slate-500">{label}</dt>
       <dd className="mt-2 text-sm font-semibold text-slate-950">{value}</dd>
     </dl>

@@ -77,6 +77,44 @@ describe("parseKaptApartmentListResponse", () => {
     });
   });
 
+  it("parses current Service3 JSON responses with body.items as an array", () => {
+    const result = parseKaptApartmentListResponse({
+      response: {
+        header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+        body: {
+          items: [
+            {
+              kaptCode: "A11620001",
+              kaptName: "Gwanak Dream Town",
+              bjdCode: "1162010100",
+              as1: "Seoul",
+              as2: "Gwanak-gu",
+              as3: "Bongcheon-dong",
+            },
+          ],
+          totalCount: 1,
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      totalCount: 1,
+      items: [
+        {
+          kaptCode: "A11620001",
+          kaptName: "Gwanak Dream Town",
+          bjdCode: "1162010100",
+          sido: "Seoul",
+          sigungu: "Gwanak-gu",
+          eupmyeondong: "Bongcheon-dong",
+          ri: null,
+          legalAddress: null,
+          roadAddress: null,
+        },
+      ],
+    });
+  });
+
   it("parses legacy list records with legal and road addresses", () => {
     const result = parseKaptApartmentListResponse(`
       <response>

@@ -163,8 +163,8 @@ function parseResponse(body) {
   }
 
   const itemNode =
-    parsed.response?.body?.item ?? parsed.response?.body?.items?.item ?? [];
-  const records = Array.isArray(itemNode) ? itemNode : [itemNode];
+    parsed.response?.body?.item ?? readItemsNode(parsed.response?.body?.items);
+  const records = toRecords(itemNode);
   const items = records.flatMap((record) => {
     const kaptCode = cleanText(record.kaptCode);
     const kaptName = cleanText(record.kaptName);
@@ -190,6 +190,26 @@ function parseResponse(body) {
     totalCount: Number.parseInt(parsed.response?.body?.totalCount ?? items.length, 10),
     items,
   };
+}
+
+function readItemsNode(itemsNode) {
+  if (isRecord(itemsNode) && "item" in itemsNode) {
+    return itemsNode.item;
+  }
+
+  return itemsNode;
+}
+
+function toRecords(itemNode) {
+  if (Array.isArray(itemNode)) {
+    return itemNode.filter(isRecord);
+  }
+
+  return isRecord(itemNode) ? [itemNode] : [];
+}
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function dedupe(items) {

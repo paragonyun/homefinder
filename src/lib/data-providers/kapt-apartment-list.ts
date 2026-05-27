@@ -289,7 +289,10 @@ export function parseKaptApartmentListResponse(
       };
       body?: {
         item?: KaptApartmentListRecord | KaptApartmentListRecord[];
-        items?: { item?: KaptApartmentListRecord | KaptApartmentListRecord[] };
+        items?:
+          | { item?: KaptApartmentListRecord | KaptApartmentListRecord[] }
+          | KaptApartmentListRecord
+          | KaptApartmentListRecord[];
         totalCount?: unknown;
       };
     };
@@ -306,8 +309,8 @@ export function parseKaptApartmentListResponse(
   assertSuccessfulKaptListResponse(parsed.response?.header);
 
   const itemNode =
-    parsed.response?.body?.item ?? parsed.response?.body?.items?.item;
-  const records = Array.isArray(itemNode) ? itemNode : itemNode ? [itemNode] : [];
+    parsed.response?.body?.item ?? readItemsNode(parsed.response?.body?.items);
+  const records = toRecords(itemNode);
   const items = records
     .map(normalizeKaptApartmentListRecord)
     .filter((item): item is KaptApartmentListItem => Boolean(item));
@@ -438,6 +441,26 @@ function readFirst(record: KaptApartmentListRecord, keys: string[]) {
   }
 
   return null;
+}
+
+function readItemsNode(itemsNode: unknown) {
+  if (isRecord(itemsNode) && "item" in itemsNode) {
+    return itemsNode.item;
+  }
+
+  return itemsNode;
+}
+
+function toRecords(itemNode: unknown): KaptApartmentListRecord[] {
+  if (Array.isArray(itemNode)) {
+    return itemNode.filter(isRecord);
+  }
+
+  return isRecord(itemNode) ? [itemNode] : [];
+}
+
+function isRecord(value: unknown): value is KaptApartmentListRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseInteger(value: unknown) {

@@ -50,4 +50,10 @@ npm run sync:kapt-directory -- --bjd 1156013200
 npm run sync:kapt-directory -- --sido 11
 ```
 
-현재 작업 환경에는 위 env가 없어서 제가 직접 운영 DB에 적재할 수는 없습니다. 다만 Vercel 운영 환경에는 `KAPT_API_KEY`가 있으므로, migration 적용 후에는 앱의 admin 조회 요청이 필요한 지역 캐시를 자동으로 채웁니다.
+현재 운영 DB에는 서울 전체 캐시를 먼저 적재했습니다.
+
+```bash
+npm run sync:kapt-directory -- --sido 11 # 서울특별시
+```
+
+추가 지역이 필요하면 같은 스크립트로 2자리 시도 코드, 5자리 시군구 코드, 10자리 법정동 코드를 넣어 적재하면 됩니다. 앱의 admin 조회 요청도 후보가 없는 지역은 외부 K-apt 목록 API를 조회한 뒤 같은 테이블에 캐시합니다.

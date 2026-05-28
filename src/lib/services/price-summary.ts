@@ -99,6 +99,33 @@ export function buildMonthlyPriceTrendLines(
     .sort((left, right) => compareAreaBucket(left.areaBucket, right.areaBucket));
 }
 
+export function getLatestTransactionMonth(
+  transactions: PriceSummaryTransaction[],
+) {
+  return transactions.reduce<string | null>((latestMonth, transaction) => {
+    const month = getTransactionMonth(transaction);
+
+    if (!month) {
+      return latestMonth;
+    }
+
+    return !latestMonth || month > latestMonth ? month : latestMonth;
+  }, null);
+}
+
+export function filterTransactionsByMonth<T extends PriceSummaryTransaction>(
+  transactions: T[],
+  month: string | null,
+) {
+  if (!month) {
+    return [];
+  }
+
+  return transactions.filter(
+    (transaction) => getTransactionMonth(transaction) === month,
+  );
+}
+
 function normalizeTransaction(
   transaction: PriceSummaryTransaction,
 ): NormalizedTransaction | null {
@@ -116,6 +143,12 @@ function normalizeTransaction(
     exclusiveAreaM2,
     dealAmountKrw,
   };
+}
+
+function getTransactionMonth(transaction: PriceSummaryTransaction) {
+  return /^\d{4}-\d{2}/.test(transaction.deal_date)
+    ? transaction.deal_date.slice(0, 7)
+    : null;
 }
 
 function summarizeByArea(transactions: NormalizedTransaction[]) {

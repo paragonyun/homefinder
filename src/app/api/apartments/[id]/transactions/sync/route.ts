@@ -139,10 +139,13 @@ export async function POST(
     matchedCount: number;
     pageCount: number;
   }> = [];
+  const matchedPageRecords: Array<{
+    dealYmd: string;
+    page: MolitApartmentTradePage;
+  }> = [];
   const candidateNames = new Map<string, number>();
   let selectedDealYmd: string | null = null;
-  let selectedPages: MolitApartmentTradePage[] = [];
-  let transactions: MolitApartmentTrade[] = [];
+  const transactions: MolitApartmentTrade[] = [];
 
   try {
     for (const dealYmd of dealYmds.dealYmds) {
@@ -174,10 +177,17 @@ export async function POST(
         pageCount: pages.length,
       });
 
-      if (matchedTransactions.length > 0 || dealYmds.mode === "manual") {
-        selectedDealYmd = dealYmd;
-        selectedPages = pages;
-        transactions = matchedTransactions;
+      if (matchedTransactions.length > 0) {
+        selectedDealYmd ??= dealYmd;
+        matchedPageRecords.push(...pages.map((page) => ({ dealYmd, page })));
+        transactions.push(...matchedTransactions);
+      }
+
+      if (dealYmds.mode === "manual") {
+        if (!selectedDealYmd) {
+          selectedDealYmd = dealYmd;
+          matchedPageRecords.push(...pages.map((page) => ({ dealYmd, page })));
+        }
         break;
       }
     }
@@ -223,10 +233,11 @@ export async function POST(
         totalCount: attempts.reduce((sum, attempt) => sum + attempt.totalCount, 0),
         matchedCount: transactions.length,
         matchedDealYmd: selectedDealYmd,
+        matchedDealYmds: getMatchedDealYmds(transactions),
         candidateNames: toCandidateNameList(candidateNames),
         attempts,
-        pages: selectedPages.map((page) => ({
-          dealYmd: selectedDealYmd,
+        pages: matchedPageRecords.map(({ dealYmd, page }) => ({
+          dealYmd,
           pageNo: page.pageNo,
           rawXml: page.rawXml,
         })),
@@ -264,10 +275,22 @@ export async function POST(
     matchedCount: transactions.length,
     totalCount: attempts.reduce((sum, attempt) => sum + attempt.totalCount, 0),
     dealYmd: selectedDealYmd,
+    matchedDealYmds: getMatchedDealYmds(transactions),
     monthsChecked: attempts.length,
     mode: dealYmds.mode,
     candidateNames: toCandidateNameList(candidateNames),
   });
+}
+
+function getMatchedDealYmds(transactions: MolitApartmentTrade[]) {
+  return Array.from(
+    new Set(
+      transactions.map(
+        (transaction) =>
+          `${transaction.dealYear}${String(transaction.dealMonth).padStart(2, "0")}`,
+      ),
+    ),
+  ).sort((left, right) => right.localeCompare(left));
 }
 
 function getMatchingTransactions(

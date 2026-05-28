@@ -143,6 +143,31 @@ describe("resolveMolitDealYmds", () => {
     expect(
       resolveMolitDealYmds({
         now: new Date("2026-05-19T00:00:00Z"),
+      }),
+    ).toEqual({
+      ok: true,
+      mode: "recent",
+      dealYmds: [
+        "202605",
+        "202604",
+        "202603",
+        "202602",
+        "202601",
+        "202512",
+        "202511",
+        "202510",
+        "202509",
+        "202508",
+        "202507",
+        "202506",
+      ],
+    });
+  });
+
+  it("accepts an explicit recent month count", () => {
+    expect(
+      resolveMolitDealYmds({
+        now: new Date("2026-05-19T00:00:00Z"),
         months: 2,
       }),
     ).toEqual({

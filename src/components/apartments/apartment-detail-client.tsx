@@ -13,6 +13,8 @@ import {
 } from "@/lib/services/chart-scale";
 import {
   buildMonthlyPriceTrendLines,
+  filterTransactionsByMonth,
+  getLatestTransactionMonth,
   summarizeApartmentPrices,
   type MonthlyPriceTrendLine,
 } from "@/lib/services/price-summary";
@@ -37,6 +39,7 @@ type TransactionSyncResult = {
   matchedCount?: number;
   totalCount?: number;
   dealYmd?: string;
+  matchedDealYmds?: string[];
   monthsChecked?: number;
   candidateNames?: Array<{ name: string; count: number }>;
 };
@@ -430,6 +433,14 @@ export function ApartmentDetailClient({
     () => buildMonthlyPriceTrendLines(priceSummary.monthlyTrend),
     [priceSummary.monthlyTrend],
   );
+  const latestTransactionMonth = useMemo(
+    () => getLatestTransactionMonth(transactions),
+    [transactions],
+  );
+  const latestMonthTransactions = useMemo(
+    () => filterTransactionsByMonth(transactions, latestTransactionMonth),
+    [latestTransactionMonth, transactions],
+  );
   const latestSummary = priceSummary.areaSummaries[0] ?? null;
   const totalTransactionCount = priceSummary.areaSummaries.reduce(
     (sum, summary) => sum + summary.transactionCount,
@@ -628,8 +639,8 @@ export function ApartmentDetailClient({
               가격/실거래가
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              국토부 아파트 매매 실거래가 상세 자료를 최근월부터 과거 24개월까지
-              조회하고, 단지명이 일치한 최신 거래월만 저장합니다.
+              국토부 아파트 매매 실거래가 상세 자료를 최근 12개월까지 조회해
+              차트에 반영하고, 아래 거래 표는 최신 거래월만 표시합니다.
             </p>
             <p className="mt-1 text-sm text-slate-500">
               법정동코드: {apartment?.lawd_cd ?? "미입력"}
@@ -745,6 +756,23 @@ export function ApartmentDetailClient({
             ) : null}
 
             <div className="overflow-x-auto">
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-950">
+                    최신 거래월 상세
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {latestTransactionMonth
+                      ? `${latestTransactionMonth} 거래 ${latestMonthTransactions.length.toLocaleString(
+                          "ko-KR",
+                        )}건만 표시합니다.`
+                      : "표시할 최신 거래월이 없습니다."}
+                  </p>
+                </div>
+                <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                  차트 기준 {transactions.length.toLocaleString("ko-KR")}건
+                </span>
+              </div>
               <table className="w-full min-w-[760px] text-left">
                 <thead className="bg-slate-50 text-sm text-slate-600">
                   <tr>
@@ -757,7 +785,7 @@ export function ApartmentDetailClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((transaction) => (
+                  {latestMonthTransactions.map((transaction) => (
                     <tr
                       key={transaction.id}
                       className="border-b border-slate-200 last:border-0"
@@ -1280,9 +1308,11 @@ async function postApartmentJson<T>(
 function formatTransactionSyncMessage(result: TransactionSyncResult) {
   const monthsChecked = result.monthsChecked ?? 0;
   const matchedCount = result.matchedCount ?? 0;
+  const matchedMonthCount =
+    result.matchedDealYmds?.length ?? (result.dealYmd ? 1 : 0);
 
-  return matchedCount > 0 && result.dealYmd
-    ? `최근 ${monthsChecked}개월을 확인했고, ${result.dealYmd} 실거래가 ${matchedCount}건을 반영했습니다.`
+  return matchedCount > 0
+    ? `최근 ${monthsChecked}개월을 확인했고, ${matchedMonthCount}개월치 실거래가 ${matchedCount}건을 반영했습니다.`
     : `최근 ${monthsChecked}개월에서 단지명 일치 거래를 찾지 못했습니다.`;
 }
 

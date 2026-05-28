@@ -61,7 +61,7 @@ const parser = new XMLParser({
   trimValues: true,
 });
 
-const DEFAULT_RECENT_MONTH_COUNT = 24;
+const DEFAULT_RECENT_MONTH_COUNT = 12;
 const MAX_RECENT_MONTH_COUNT = 36;
 
 export function resolveMolitDealYmds({

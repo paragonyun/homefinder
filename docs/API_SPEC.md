@@ -50,7 +50,7 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 - 인증: `Authorization: Bearer <Supabase access token>`
 - 권한: `app_metadata.role = admin`
 - 요청 body: 기본값은 `{}`. 고급 수동 조회가 필요하면 `{ "dealYmd": "202501" }`도 허용합니다.
-- 동작: 단지의 `lawd_cd`로 국토부 상세 API를 최근월부터 최대 24개월까지 조회하고, 단지명이 처음 일치한 최신 거래월만 `apartment_transactions`에 upsert합니다.
+- 동작: 단지의 `lawd_cd`로 국토부 상세 API를 최근월부터 기본 12개월까지 조회하고, 단지명이 일치한 거래를 `apartment_transactions`에 upsert합니다. 상세 화면의 차트는 저장된 최근 12개월을 사용하고, 하단 거래 표는 최신 거래월만 표시합니다.
 - 매칭: `apartments.name`, `display_name`, `apartment_aliases.source = molit` alias를 사용합니다. 매칭 실패 시 `candidateNames`에 국토부 원천명 후보를 반환할 수 있습니다.
 - 실패: `MOLIT_API_KEY` 없음, 법정동코드 없음, 권한 없음, 단지명 매칭 없음을 명시적으로 반환합니다.
 

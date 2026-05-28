@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMonthlyPriceTrendLines,
+  filterTransactionsByMonth,
+  getLatestTransactionMonth,
   summarizeApartmentPrices,
 } from "./price-summary";
 
@@ -189,6 +191,54 @@ describe("summarizeApartmentPrices", () => {
         ],
         totalTransactionCount: 1,
         isSparse: true,
+      },
+    ]);
+  });
+
+  it("filters table transactions to the latest deal month while preserving chart history", () => {
+    const transactions = [
+      {
+        deal_date: "2025-05-15",
+        exclusive_area_m2: 84.96,
+        deal_amount_krw: 1_200_000_000,
+        cancel_yn: null,
+      },
+      {
+        deal_date: "2025-05-01",
+        exclusive_area_m2: 59.97,
+        deal_amount_krw: 1_070_000_000,
+        cancel_yn: null,
+      },
+      {
+        deal_date: "2025-04-23",
+        exclusive_area_m2: 84.96,
+        deal_amount_krw: 1_180_000_000,
+        cancel_yn: null,
+      },
+    ];
+
+    const latestMonth = getLatestTransactionMonth(transactions);
+
+    expect(latestMonth).toBe("2025-05");
+    expect(filterTransactionsByMonth(transactions, latestMonth)).toHaveLength(2);
+    expect(summarizeApartmentPrices(transactions).monthlyTrend).toEqual([
+      {
+        month: "2025-04",
+        areaBucket: "84",
+        averagePriceKrw: 1_180_000_000,
+        transactionCount: 1,
+      },
+      {
+        month: "2025-05",
+        areaBucket: "59",
+        averagePriceKrw: 1_070_000_000,
+        transactionCount: 1,
+      },
+      {
+        month: "2025-05",
+        areaBucket: "84",
+        averagePriceKrw: 1_200_000_000,
+        transactionCount: 1,
       },
     ]);
   });

@@ -16,6 +16,7 @@ import {
   filterTransactionsByMonth,
   getLatestTransactionMonth,
   summarizeApartmentPrices,
+  summarizeMonthlyTrendWindow,
   type MonthlyPriceTrendLine,
 } from "@/lib/services/price-summary";
 import {
@@ -1067,6 +1068,7 @@ function PriceTrendLineChart({
   const lowestPoint = chartPoints.reduce((current, point) =>
     point.averagePriceKrw < current.averagePriceKrw ? point : current,
   );
+  const trendWindow = summarizeMonthlyTrendWindow(visibleLines);
 
   const getX = (month: string) => {
     if (months.length === 1) {
@@ -1109,7 +1111,7 @@ function PriceTrendLineChart({
 
   return (
     <div className="mt-4">
-      <div className="mb-4 grid gap-2 sm:grid-cols-3">
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <ChartStat
           label="최신"
           value={formatKrw(latestPoint.averagePriceKrw)}
@@ -1125,6 +1127,15 @@ function PriceTrendLineChart({
           value={formatKrw(lowestPoint.averagePriceKrw)}
           detail={`${lowestPoint.month} · ${lowestPoint.areaBucket}㎡대`}
         />
+        {trendWindow ? (
+          <ChartStat
+            label="기간 변화"
+            value={formatSignedKrw(trendWindow.changeKrw)}
+            detail={`${trendWindow.firstMonth} → ${trendWindow.latestMonth} · ${formatTrendPercent(
+              trendWindow.changePercent,
+            )}`}
+          />
+        ) : null}
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-3">
         <svg
@@ -1277,6 +1288,29 @@ function ChartStat({
       <p className="mt-1 text-xs text-slate-500">{detail}</p>
     </div>
   );
+}
+
+function formatSignedKrw(value: number) {
+  if (value === 0) {
+    return "변동 없음";
+  }
+
+  return `${value > 0 ? "+" : "-"}${formatKrw(Math.abs(value))}`;
+}
+
+function formatTrendPercent(value: number | null) {
+  if (value === null) {
+    return "비교 불가";
+  }
+
+  if (value === 0) {
+    return "0.0%";
+  }
+
+  return `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  })}%`;
 }
 
 async function readJsonResult<T>(response: Response): Promise<T> {

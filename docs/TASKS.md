@@ -34,7 +34,7 @@
 - [x] Magic link 제거 및 비밀번호 로그인 전환
 - [x] 동네/단지 CUD 운영자 제한 RLS 추가
 - [ ] 운영자 제한 migration 실제 적용
-- [ ] Supabase 운영자 계정 생성 및 `app_metadata.role = admin` 설정
+- [x] Supabase 운영자 계정 생성 및 `app_metadata.role = admin` 설정
 
 ## 데이터 연동
 
@@ -48,9 +48,9 @@
 - [x] 실거래가 동기화 route 작성
 - [x] 단지 상세 거래 테이블 표시
 - [x] 최근월 기준 자동 실거래가 동기화
-- [ ] Supabase에 거래 migration 실제 적용
+- [x] Supabase에 거래 migration 실제 적용
 - [x] Vercel에 `MOLIT_API_KEY` 등록
-- [ ] 실제 국토부 API 응답으로 운영 환경 동기화 검증
+- [x] 실제 국토부 API 응답으로 운영 환경 동기화 검증
 - [x] 평형대 bucket 계산
 - [x] K-apt API 문서 확인
 - [x] K-apt 코드 수동 보정 UI
@@ -64,7 +64,7 @@
 - [x] 단지 상세 아파트 종합 정보 조회 버튼 추가
 - [x] Supabase에 K-apt 기본정보 migration 실제 적용
 - [x] Vercel에 `KAPT_API_KEY` 등록
-- [ ] 실제 K-apt API 응답으로 운영 환경 동기화 검증
+- [x] 실제 K-apt API 응답으로 운영 환경 동기화 검증
 
 ## 운영 적용 메모
 
@@ -74,11 +74,11 @@
 - [x] Vercel에 `MOLIT_API_KEY` 등록
 - [x] 초기 Supabase migration 실제 적용
 - [ ] Supabase에 `20260519000100_admin_only_core_mutations.sql` 적용 확인
-- [ ] Supabase에 `20260519000200_apartment_transactions.sql` 적용 확인
-- [ ] Supabase에 `20260520000100_apartment_aliases.sql` 적용 확인
+- [x] Supabase에 `20260519000200_apartment_transactions.sql` 적용 확인
+- [x] Supabase에 `20260520000100_apartment_aliases.sql` 적용 확인
 - [x] Supabase에 `20260520000200_apartment_basic_info.sql` 적용
 - [x] Vercel에 `KAPT_API_KEY` 등록
-- [ ] Supabase 운영자 계정 `app_metadata.role = admin` 설정 확인
+- [x] Supabase 운영자 계정 `app_metadata.role = admin` 설정 확인
 
 ## 금지/주의
 
@@ -91,4 +91,5 @@
 
 ## 사용자 직접 작업
 
-- [ ] Supabase SQL Editor에 `supabase/migrations/20260521000100_kapt_code_directory.sql` 적용
+- [x] Supabase SQL Editor에 `supabase/migrations/20260521000100_kapt_code_directory.sql` 적용
+- [x] `kapt_code_directory` 서울 단지 디렉터리 seed 적용

@@ -37,6 +37,17 @@ export type MonthlyPriceTrendLine = {
   isSparse: boolean;
 };
 
+export type MonthlyTrendWindowSummary = {
+  firstMonth: string;
+  latestMonth: string;
+  monthCount: number;
+  pointCount: number;
+  firstAveragePriceKrw: number;
+  latestAveragePriceKrw: number;
+  changeKrw: number;
+  changePercent: number | null;
+};
+
 type NormalizedTransaction = {
   dealDate: string;
   month: string;
@@ -124,6 +135,63 @@ export function filterTransactionsByMonth<T extends PriceSummaryTransaction>(
   return transactions.filter(
     (transaction) => getTransactionMonth(transaction) === month,
   );
+}
+
+export function summarizeMonthlyTrendWindow(
+  lines: MonthlyPriceTrendLine[],
+): MonthlyTrendWindowSummary | null {
+  const monthBuckets = new Map<
+    string,
+    { weightedTotalKrw: number; transactionCount: number; pointCount: number }
+  >();
+
+  for (const line of lines) {
+    for (const point of line.points) {
+      const current = monthBuckets.get(point.month) ?? {
+        weightedTotalKrw: 0,
+        transactionCount: 0,
+        pointCount: 0,
+      };
+
+      current.weightedTotalKrw +=
+        point.averagePriceKrw * point.transactionCount;
+      current.transactionCount += point.transactionCount;
+      current.pointCount += 1;
+      monthBuckets.set(point.month, current);
+    }
+  }
+
+  const monthlyAverages = Array.from(monthBuckets, ([month, bucket]) => ({
+    month,
+    averagePriceKrw:
+      bucket.transactionCount > 0
+        ? Math.round(bucket.weightedTotalKrw / bucket.transactionCount)
+        : 0,
+    pointCount: bucket.pointCount,
+  })).sort((left, right) => left.month.localeCompare(right.month));
+
+  if (monthlyAverages.length === 0) {
+    return null;
+  }
+
+  const first = monthlyAverages[0];
+  const latest = monthlyAverages[monthlyAverages.length - 1];
+  const changeKrw = latest.averagePriceKrw - first.averagePriceKrw;
+
+  return {
+    firstMonth: first.month,
+    latestMonth: latest.month,
+    monthCount: monthlyAverages.length,
+    pointCount: monthlyAverages.reduce(
+      (sum, month) => sum + month.pointCount,
+      0,
+    ),
+    firstAveragePriceKrw: first.averagePriceKrw,
+    latestAveragePriceKrw: latest.averagePriceKrw,
+    changeKrw,
+    changePercent:
+      first.averagePriceKrw > 0 ? (changeKrw / first.averagePriceKrw) * 100 : null,
+  };
 }
 
 function normalizeTransaction(

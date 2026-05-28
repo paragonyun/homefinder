@@ -14,7 +14,7 @@
 supabase/migrations/20260521000100_kapt_code_directory.sql
 ```
 
-운영 Supabase SQL Editor에 이 파일을 적용해야 `kapt_code_directory` 캐시가 저장됩니다. 적용 전에도 앱은 외부 API fallback으로 동작하지만, 캐시는 저장되지 않습니다.
+운영 Supabase에는 이 migration이 적용되어 있습니다. 적용 전 환경에서는 앱이 외부 API fallback으로 동작하지만, 캐시는 저장되지 않습니다.
 
 ## 자동 캐시 흐름
 
@@ -50,7 +50,7 @@ npm run sync:kapt-directory -- --bjd 1156013200
 npm run sync:kapt-directory -- --sido 11
 ```
 
-현재 운영 DB에는 서울 전체 캐시를 먼저 적재했습니다.
+현재 운영 DB에는 서울 전체 캐시를 먼저 적재했습니다. 2026-05-29 기준 `kapt_code_directory` 3,372건을 확인했습니다.
 
 ```bash
 npm run sync:kapt-directory -- --sido 11 # 서울특별시

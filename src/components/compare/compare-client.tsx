@@ -443,8 +443,16 @@ function ComparisonMatrix({
                 value={formatOptionalCount(row.householdCount, "세대")}
               />
               <MiniMetric
+                label="동수"
+                value={formatOptionalCount(row.buildingCount, "동")}
+              />
+              <MiniMetric
                 label="주차"
                 value={formatOptionalCount(row.parkingCount, "대")}
+              />
+              <MiniMetric
+                label="주차/세대"
+                value={formatParkingPerHousehold(row.parkingPerHousehold)}
               />
             </div>
             <div className="mt-4">
@@ -470,7 +478,12 @@ function BasicInfoSummary({
     <div className="grid gap-1">
       <p>
         {formatOptionalCount(row.householdCount, "세대")} ·{" "}
+        {formatOptionalCount(row.buildingCount, "동")} ·{" "}
         {formatOptionalCount(row.parkingCount, "대 주차")}
+      </p>
+      <p className="text-xs text-slate-500">
+        주차/세대 {formatParkingPerHousehold(row.parkingPerHousehold)} ·{" "}
+        경과 {formatBuildingAge(row.buildingAgeYears)}
       </p>
       <p className="text-xs text-slate-500">
         사용승인 {row.approvalDate ? formatDate(row.approvalDate) : "-"}
@@ -597,6 +610,19 @@ function MockCompareTable() {
 
 function formatOptionalCount(value: number | null, suffix: string) {
   return value !== null ? `${value.toLocaleString("ko-KR")}${suffix}` : "-";
+}
+
+function formatParkingPerHousehold(value: number | null) {
+  return value !== null
+    ? `${value.toLocaleString("ko-KR", {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      })}대`
+    : "-";
+}
+
+function formatBuildingAge(value: number | null) {
+  return value !== null ? `${value.toLocaleString("ko-KR")}년` : "-";
 }
 
 function isMissingTableError(error: { code?: string }) {

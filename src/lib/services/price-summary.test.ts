@@ -4,6 +4,7 @@ import {
   filterTransactionsByMonth,
   getLatestTransactionMonth,
   summarizeApartmentPrices,
+  summarizeMonthlyTrendWindow,
 } from "./price-summary";
 
 describe("summarizeApartmentPrices", () => {
@@ -241,5 +242,38 @@ describe("summarizeApartmentPrices", () => {
         transactionCount: 1,
       },
     ]);
+  });
+
+  it("summarizes the visible trend window with weighted monthly averages", () => {
+    const lines = buildMonthlyPriceTrendLines([
+      {
+        month: "2025-04",
+        areaBucket: "59",
+        averagePriceKrw: 1_000_000_000,
+        transactionCount: 1,
+      },
+      {
+        month: "2025-04",
+        areaBucket: "84",
+        averagePriceKrw: 1_300_000_000,
+        transactionCount: 2,
+      },
+      {
+        month: "2025-05",
+        areaBucket: "59",
+        averagePriceKrw: 1_100_000_000,
+        transactionCount: 1,
+      },
+    ]);
+
+    expect(summarizeMonthlyTrendWindow(lines)).toMatchObject({
+      firstMonth: "2025-04",
+      latestMonth: "2025-05",
+      monthCount: 2,
+      pointCount: 3,
+      firstAveragePriceKrw: 1_200_000_000,
+      latestAveragePriceKrw: 1_100_000_000,
+      changeKrw: -100_000_000,
+    });
   });
 });

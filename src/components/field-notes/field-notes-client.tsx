@@ -37,6 +37,9 @@ const emptyForm: FieldNoteFormState = {
   overallMemo: "",
 };
 
+const ratingOptions = [1, 2, 3, 4, 5] as const;
+const weatherOptions = ["맑음", "흐림", "비", "눈", "더움", "추움"] as const;
+
 export function FieldNotesClient({
   apartmentId,
   apartmentName,
@@ -48,6 +51,14 @@ export function FieldNotesClient({
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
+  const canSave = isSupabaseConfigured && Boolean(session) && !isMockApartment;
+
+  function updateFormField(field: keyof FieldNoteFormState, value: string) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
 
   const loadNotes = useCallback(async () => {
     if (!supabase || isMockApartment) {
@@ -172,15 +183,20 @@ export function FieldNotesClient({
 
       <form
         onSubmit={handleSubmit}
-        className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5"
+        className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
       >
-        <div>
-          <p className="text-sm font-semibold text-emerald-800">
-            모바일 임장 메모
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-slate-950">
-            {apartmentName}
-          </h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+              Field note
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">
+              {apartmentName}
+            </h2>
+          </div>
+          <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+            기록 {notes.length.toLocaleString("ko-KR")}건
+          </span>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -189,12 +205,9 @@ export function FieldNotesClient({
               type="date"
               value={form.visitDate}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  visitDate: event.target.value,
-                }))
+                updateFormField("visitDate", event.target.value)
               }
-              className="rounded-md border border-slate-300 px-3 py-2"
+              className="h-11 rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
             />
           </label>
           <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -202,54 +215,73 @@ export function FieldNotesClient({
             <input
               value={form.visitTime}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  visitTime: event.target.value,
-                }))
+                updateFormField("visitTime", event.target.value)
               }
-              className="rounded-md border border-slate-300 px-3 py-2"
+              className="h-11 rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
               placeholder="예: 평일 저녁"
             />
           </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
+          <div className="grid gap-2 text-sm font-medium text-slate-700">
             날씨
+            <div className="flex flex-wrap gap-2">
+              {weatherOptions.map((option) => (
+                <button
+                  type="button"
+                  key={option}
+                  onClick={() => updateFormField("weather", option)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    form.weather === option
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
             <input
               value={form.weather}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  weather: event.target.value,
-                }))
+                updateFormField("weather", event.target.value)
               }
-              className="rounded-md border border-slate-300 px-3 py-2"
-              placeholder="예: 흐림"
+              className="h-11 rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              placeholder="직접 입력"
             />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
+          </div>
+          <div className="grid gap-2 text-sm font-medium text-slate-700">
             종합 평점
-            <input
-              value={form.overallRating}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  overallRating: event.target.value,
-                }))
-              }
-              className="rounded-md border border-slate-300 px-3 py-2"
-              placeholder="1-5"
-            />
-          </label>
+            <div className="grid grid-cols-5 gap-2">
+              {ratingOptions.map((rating) => (
+                <button
+                  type="button"
+                  key={rating}
+                  aria-pressed={form.overallRating === String(rating)}
+                  onClick={() =>
+                    updateFormField(
+                      "overallRating",
+                      form.overallRating === String(rating) ? "" : String(rating),
+                    )
+                  }
+                  className={`h-11 rounded-md border text-sm font-semibold transition ${
+                    form.overallRating === String(rating)
+                      ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  {rating}
+                </button>
+              ))}
+            </div>
+          </div>
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             장점
             <textarea
               value={form.goodPoints}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  goodPoints: event.target.value,
-                }))
+                updateFormField("goodPoints", event.target.value)
               }
-              className="min-h-24 rounded-md border border-slate-300 px-3 py-2"
+              className="min-h-28 rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              placeholder="좋았던 점"
             />
           </label>
           <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -257,12 +289,10 @@ export function FieldNotesClient({
             <textarea
               value={form.badPoints}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  badPoints: event.target.value,
-                }))
+                updateFormField("badPoints", event.target.value)
               }
-              className="min-h-24 rounded-md border border-slate-300 px-3 py-2"
+              className="min-h-28 rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              placeholder="아쉬웠던 점"
             />
           </label>
           <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
@@ -270,21 +300,19 @@ export function FieldNotesClient({
             <textarea
               value={form.overallMemo}
               onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  overallMemo: event.target.value,
-                }))
+                updateFormField("overallMemo", event.target.value)
               }
-              className="min-h-24 rounded-md border border-slate-300 px-3 py-2"
+              className="min-h-28 rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              placeholder="다시 볼지, 보류할지, 추가 확인할 점"
             />
           </label>
         </div>
         <button
           type="submit"
-          disabled={isLoading || !session || isMockApartment}
-          className="w-fit rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400"
+          disabled={isLoading || !canSave}
+          className="w-full rounded-md bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:bg-slate-400 sm:w-fit"
         >
-          저장
+          {isLoading ? "저장 중" : "임장 메모 저장"}
         </button>
       </form>
 
@@ -299,29 +327,70 @@ export function FieldNotesClient({
           {notes.map((note) => (
             <article
               key={note.id}
-              className="rounded-lg border border-slate-200 bg-white p-5"
+              className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-slate-950">
+                  <p className="text-base font-semibold text-slate-950">
                     {formatDate(note.visit_date)}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-700">
-                    {note.overall_memo ?? "총평 없음"}
-                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <NoteMeta label={note.visit_time ?? "시간 미입력"} />
+                    <NoteMeta label={note.weather ?? "날씨 미입력"} />
+                    <NoteMeta
+                      label={
+                        note.overall_rating !== null
+                          ? `평점 ${note.overall_rating}/5`
+                          : "평점 미입력"
+                      }
+                    />
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => void handleDelete(note.id)}
-                  className="w-fit rounded-md border border-rose-300 px-3 py-2 text-sm font-semibold text-rose-700"
+                  disabled={isLoading}
+                  className="w-fit rounded-md border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:text-slate-400"
                 >
                   삭제
                 </button>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <NoteSection label="장점" value={note.good_points} />
+                <NoteSection label="단점" value={note.bad_points} />
+                <NoteSection
+                  label="총평"
+                  value={note.overall_memo}
+                  className="md:col-span-2"
+                />
               </div>
             </article>
           ))}
         </section>
       ) : null}
+    </div>
+  );
+}
+
+function NoteMeta({ label }: Readonly<{ label: string }>) {
+  return (
+    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
+      {label}
+    </span>
+  );
+}
+
+function NoteSection({
+  className = "",
+  label,
+  value,
+}: Readonly<{ className?: string; label: string; value: string | null }>) {
+  return (
+    <div className={`rounded-md border border-slate-200 bg-slate-50 p-3 ${className}`}>
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+        {value ?? "-"}
+      </p>
     </div>
   );
 }

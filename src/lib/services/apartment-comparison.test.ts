@@ -62,8 +62,11 @@ describe("buildApartmentComparisonRows", () => {
         latestAreaBucket: "84",
         transactionCount: 1,
         householdCount: null,
+        buildingCount: null,
         parkingCount: null,
+        parkingPerHousehold: null,
         approvalDate: null,
+        buildingAgeYears: null,
         basicInfoFetchedAt: null,
         areaSummaries: [
           {
@@ -87,8 +90,11 @@ describe("buildApartmentComparisonRows", () => {
         latestAreaBucket: "59",
         transactionCount: 1,
         householdCount: null,
+        buildingCount: null,
         parkingCount: null,
+        parkingPerHousehold: null,
         approvalDate: null,
+        buildingAgeYears: null,
         basicInfoFetchedAt: null,
         areaSummaries: [
           {
@@ -121,6 +127,7 @@ describe("buildApartmentComparisonRows", () => {
         {
           apartment_id: "apt-1",
           household_count: 3_544,
+          building_count: 44,
           parking_count: 4_102,
           approval_date: "2003-09-30",
           fetched_at: "2026-05-19T10:00:00.000Z",
@@ -128,6 +135,7 @@ describe("buildApartmentComparisonRows", () => {
         {
           apartment_id: "apt-1",
           household_count: 3_500,
+          building_count: 42,
           parking_count: 4_000,
           approval_date: "2003-09-01",
           fetched_at: "2026-05-18T10:00:00.000Z",
@@ -137,9 +145,12 @@ describe("buildApartmentComparisonRows", () => {
 
     expect(rows[0]).toMatchObject({
       householdCount: 3_544,
+      buildingCount: 44,
       parkingCount: 4_102,
       approvalDate: "2003-09-30",
       basicInfoFetchedAt: "2026-05-19T10:00:00.000Z",
     });
+    expect(rows[0].parkingPerHousehold).toBeCloseTo(4_102 / 3_544, 5);
+    expect(rows[0].buildingAgeYears).toBeGreaterThanOrEqual(20);
   });
 });

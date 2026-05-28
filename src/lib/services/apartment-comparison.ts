@@ -21,6 +21,7 @@ export type ComparisonTransaction = PriceSummaryTransaction & {
 export type ComparisonBasicInfo = {
   apartment_id: string;
   household_count: number | null;
+  building_count: number | null;
   parking_count: number | null;
   approval_date: string | null;
   fetched_at: string | null;
@@ -38,8 +39,11 @@ export type ApartmentComparisonRow = {
   latestAreaBucket: string | null;
   transactionCount: number;
   householdCount: number | null;
+  buildingCount: number | null;
   parkingCount: number | null;
+  parkingPerHousehold: number | null;
   approvalDate: string | null;
+  buildingAgeYears: number | null;
   basicInfoFetchedAt: string | null;
   areaSummaries: Array<{
     areaBucket: string;
@@ -81,8 +85,14 @@ export function buildApartmentComparisonRows(
       latestAreaBucket: latestSummary?.areaBucket ?? null,
       transactionCount,
       householdCount: basicInfo?.household_count ?? null,
+      buildingCount: basicInfo?.building_count ?? null,
       parkingCount: basicInfo?.parking_count ?? null,
+      parkingPerHousehold: getParkingPerHousehold(
+        basicInfo?.parking_count ?? null,
+        basicInfo?.household_count ?? null,
+      ),
       approvalDate: basicInfo?.approval_date ?? null,
+      buildingAgeYears: getBuildingAgeYears(basicInfo?.approval_date ?? null),
       basicInfoFetchedAt: basicInfo?.fetched_at ?? null,
       areaSummaries: priceSummary.areaSummaries.map((summary) => ({
         areaBucket: summary.areaBucket,
@@ -114,4 +124,55 @@ function compareFetchedAt(
   right: ComparisonBasicInfo,
 ) {
   return (left.fetched_at ?? "").localeCompare(right.fetched_at ?? "");
+}
+
+function getParkingPerHousehold(
+  parkingCount: number | null,
+  householdCount: number | null,
+) {
+  if (
+    parkingCount === null ||
+    householdCount === null ||
+    householdCount <= 0
+  ) {
+    return null;
+  }
+
+  return parkingCount / householdCount;
+}
+
+function getBuildingAgeYears(approvalDate: string | null, today = new Date()) {
+  if (!approvalDate) {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(approvalDate);
+
+  if (!match) {
+    return null;
+  }
+
+  const approvalYear = Number(match[1]);
+  const approvalMonth = Number(match[2]);
+  const approvalDay = Number(match[3]);
+
+  if (
+    !Number.isInteger(approvalYear) ||
+    !Number.isInteger(approvalMonth) ||
+    !Number.isInteger(approvalDay)
+  ) {
+    return null;
+  }
+
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+  const hasPassedAnniversary =
+    currentMonth > approvalMonth ||
+    (currentMonth === approvalMonth && currentDay >= approvalDay);
+
+  return Math.max(
+    0,
+    currentYear - approvalYear - (hasPassedAnniversary ? 0 : 1),
+  );
 }

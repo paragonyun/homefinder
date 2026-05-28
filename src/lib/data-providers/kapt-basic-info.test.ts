@@ -53,6 +53,61 @@ describe("parseKaptBasicInfoResponse", () => {
     });
   });
 
+  it("merges basis and detail K-apt responses into one basic info row", () => {
+    const response = {
+      basis: {
+        response: {
+          header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+          body: {
+            item: {
+              kaptCode: "A15180705",
+              kaptName: "Gwanak Dream Town",
+              kaptAddr: "Seoul Gwanak-gu Bongcheon-dong 1712",
+              doroJuso: "Seoul Gwanak-gu Seonghyeon-ro 80",
+              kaptdaCnt: 3544,
+              kaptDongCnt: "44",
+              kaptUsedate: "20030906",
+              codeHeatNm: "Individual heating",
+              codeMgrNm: "Contracted management",
+              codeSaleNm: "Sale",
+              kaptTarea: 531140,
+            },
+          },
+        },
+      },
+      detail: {
+        response: {
+          header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+          body: {
+            item: {
+              kaptCode: "A15180705",
+              kaptName: "Gwanak Dream Town",
+              kaptdPcnt: "975",
+              kaptdPcntu: "4429",
+              kaptdEcnt: 92,
+            },
+          },
+        },
+      },
+    };
+
+    expect(parseKaptBasicInfoResponse(response)).toMatchObject({
+      kaptCode: "A15180705",
+      kaptName: "Gwanak Dream Town",
+      legalAddress: "Seoul Gwanak-gu Bongcheon-dong 1712",
+      roadAddress: "Seoul Gwanak-gu Seonghyeon-ro 80",
+      householdCount: 3544,
+      buildingCount: 44,
+      approvalDate: "2003-09-06",
+      heatingType: "Individual heating",
+      managementType: "Contracted management",
+      saleType: "Sale",
+      parkingCount: 5404,
+      elevatorCount: 92,
+      grossFloorAreaM2: 531140,
+    });
+  });
+
   it("returns null when K-apt has no item for the code", () => {
     expect(
       parseKaptBasicInfoResponse({
@@ -87,14 +142,14 @@ describe("parseKaptBasicInfoResponse", () => {
 });
 
 describe("buildKaptBasicInfoUrl", () => {
-  it("uses the current AptBasisInfoServiceV4 endpoint and encodes decoded keys once", () => {
+  it("uses the current AptBasisInfoServiceV4 basis endpoint and encodes decoded keys once", () => {
     const url = buildKaptBasicInfoUrl({
       serviceKey: "abc+/=",
       kaptCode: "A10027875",
     });
 
     expect(url).toMatch(
-      /^http:\/\/apis\.data\.go\.kr\/1613000\/AptBasisInfoServiceV4\/getAphusDtlInfoV4/,
+      /^http:\/\/apis\.data\.go\.kr\/1613000\/AptBasisInfoServiceV4\/getAphusBassInfoV4/,
     );
     expect(url).toContain("ServiceKey=abc%2B%2F%3D");
     expect(url).toContain("kaptCode=A10027875");
@@ -113,6 +168,51 @@ describe("buildKaptBasicInfoUrl", () => {
 });
 
 describe("fetchKaptBasicInfoJson", () => {
+  it("fetches basis and detail responses", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            response: {
+              header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+              body: { item: { kaptCode: "A10027875", kaptName: "Basis" } },
+            },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            response: {
+              header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+              body: { item: { kaptCode: "A10027875", kaptName: "Detail" } },
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+
+    const result = await fetchKaptBasicInfoJson({
+      serviceKey: "abc",
+      kaptCode: "A10027875",
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      basis: {
+        response: {
+          body: { item: { kaptName: "Basis" } },
+        },
+      },
+      detail: {
+        response: {
+          body: { item: { kaptName: "Detail" } },
+        },
+      },
+    });
+  });
+
   it("surfaces API error bodies from non-2xx responses", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(

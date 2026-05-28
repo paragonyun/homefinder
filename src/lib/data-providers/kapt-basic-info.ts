@@ -1,7 +1,10 @@
 import { XMLParser } from "fast-xml-parser";
 
 export const KAPT_BASIC_INFO_ENDPOINT =
+  "http://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4";
+export const KAPT_BASIC_INFO_DETAIL_ENDPOINT =
   "http://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusDtlInfoV4";
+export const KAPT_BASIC_INFO_SOURCE_REF = `${KAPT_BASIC_INFO_ENDPOINT},${KAPT_BASIC_INFO_DETAIL_ENDPOINT}`;
 
 type KaptApiRecord = Record<string, unknown>;
 
@@ -33,6 +36,24 @@ const parser = new XMLParser({
 });
 
 export function parseKaptBasicInfoResponse(response: unknown) {
+  if (isCombinedKaptBasicInfoResponse(response)) {
+    const records = [response.detail, response.basis]
+      .map(readFirstKaptBasicInfoRecord)
+      .filter((record): record is KaptApiRecord => Boolean(record));
+
+    if (records.length === 0) {
+      return null;
+    }
+
+    return normalizeKaptBasicInfoRecord(Object.assign({}, ...records));
+  }
+
+  const record = readFirstKaptBasicInfoRecord(response);
+
+  return record ? normalizeKaptBasicInfoRecord(record) : null;
+}
+
+function readFirstKaptBasicInfoRecord(response: unknown) {
   const parsed = response as {
     response?: {
       header?: {
@@ -41,7 +62,10 @@ export function parseKaptBasicInfoResponse(response: unknown) {
       };
       body?: {
         item?: KaptApiRecord | KaptApiRecord[];
-        items?: { item?: KaptApiRecord | KaptApiRecord[] };
+        items?:
+          | { item?: KaptApiRecord | KaptApiRecord[] }
+          | KaptApiRecord
+          | KaptApiRecord[];
       };
     };
     OpenAPI_ServiceResponse?: {
@@ -57,22 +81,36 @@ export function parseKaptBasicInfoResponse(response: unknown) {
   assertSuccessfulKaptResponse(parsed.response?.header);
 
   const itemNode =
-    parsed.response?.body?.item ?? parsed.response?.body?.items?.item;
-  const records = Array.isArray(itemNode) ? itemNode : itemNode ? [itemNode] : [];
-  const record = records[0];
-
-  if (!record) {
-    return null;
-  }
-
-  return normalizeKaptBasicInfoRecord(record);
+    parsed.response?.body?.item ?? readItemsNode(parsed.response?.body?.items);
+  return toRecords(itemNode)[0] ?? null;
 }
 
 export async function fetchKaptBasicInfoJson({
   serviceKey,
   kaptCode,
 }: FetchKaptBasicInfoParams) {
-  const response = await fetch(buildKaptBasicInfoUrl({ serviceKey, kaptCode }));
+  const basis = await fetchKaptBasicInfoEndpoint({
+    endpoint: KAPT_BASIC_INFO_ENDPOINT,
+    serviceKey,
+    kaptCode,
+  });
+  const detail = await fetchKaptBasicInfoEndpoint({
+    endpoint: KAPT_BASIC_INFO_DETAIL_ENDPOINT,
+    serviceKey,
+    kaptCode,
+  });
+
+  return { basis, detail };
+}
+
+async function fetchKaptBasicInfoEndpoint({
+  endpoint,
+  serviceKey,
+  kaptCode,
+}: FetchKaptBasicInfoParams & { endpoint: string }) {
+  const response = await fetch(
+    buildKaptBasicInfoUrl({ endpoint, serviceKey, kaptCode }),
+  );
   const body = await response.text();
   const parsed = parseResponseBody(body);
 
@@ -84,9 +122,10 @@ export async function fetchKaptBasicInfoJson({
 }
 
 export function buildKaptBasicInfoUrl({
+  endpoint = KAPT_BASIC_INFO_ENDPOINT,
   serviceKey,
   kaptCode,
-}: FetchKaptBasicInfoParams) {
+}: FetchKaptBasicInfoParams & { endpoint?: string }) {
   const params = new URLSearchParams({
     kaptCode,
     _type: "json",
@@ -96,7 +135,7 @@ export function buildKaptBasicInfoUrl({
     ? trimmedServiceKey
     : encodeURIComponent(trimmedServiceKey);
 
-  return `${KAPT_BASIC_INFO_ENDPOINT}?ServiceKey=${serviceKeyParam}&${params.toString()}`;
+  return `${endpoint}?ServiceKey=${serviceKeyParam}&${params.toString()}`;
 }
 
 function normalizeKaptBasicInfoRecord(record: KaptApiRecord): KaptBasicInfo {
@@ -109,10 +148,12 @@ function normalizeKaptBasicInfoRecord(record: KaptApiRecord): KaptBasicInfo {
     buildingCount: parseInteger(record.kaptDongCnt),
     approvalDate: parseCompactDate(record.kaptUsedate),
     heatingType: cleanText(record.codeHeatNm),
-    managementType: cleanText(record.codeMgrNm),
+    managementType: cleanText(readFirst(record, ["codeMgrNm", "codeMgr"])),
     saleType: cleanText(record.codeSaleNm),
     parkingCount: parseParkingCount(record),
-    elevatorCount: parseInteger(readFirst(record, ["kaptdEcnt", "elevatorCnt"])),
+    elevatorCount: parseInteger(
+      readFirst(record, ["kaptdEcnt", "kaptdEcntp", "elevatorCnt"]),
+    ),
     grossFloorAreaM2: parseNumber(record.kaptTarea),
   };
 }
@@ -218,6 +259,32 @@ function readFirst(record: KaptApiRecord, keys: string[]) {
   }
 
   return null;
+}
+
+function readItemsNode(itemsNode: unknown) {
+  if (isRecord(itemsNode) && "item" in itemsNode) {
+    return itemsNode.item;
+  }
+
+  return itemsNode;
+}
+
+function toRecords(itemNode: unknown): KaptApiRecord[] {
+  if (Array.isArray(itemNode)) {
+    return itemNode.filter(isRecord);
+  }
+
+  return isRecord(itemNode) ? [itemNode] : [];
+}
+
+function isCombinedKaptBasicInfoResponse(
+  response: unknown,
+): response is { basis?: unknown; detail?: unknown } {
+  return isRecord(response) && ("basis" in response || "detail" in response);
+}
+
+function isRecord(value: unknown): value is KaptApiRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function cleanText(value: unknown) {

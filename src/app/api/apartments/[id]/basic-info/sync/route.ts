@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
   fetchKaptBasicInfoJson,
-  KAPT_BASIC_INFO_ENDPOINT,
+  KAPT_BASIC_INFO_SOURCE_REF,
   parseKaptBasicInfoResponse,
   type KaptBasicInfo,
 } from "@/lib/data-providers/kapt-basic-info";
@@ -110,7 +110,7 @@ export async function POST(
     .from("raw_api_responses")
     .insert({
       provider: "kapt",
-      endpoint: KAPT_BASIC_INFO_ENDPOINT,
+      endpoint: KAPT_BASIC_INFO_SOURCE_REF,
       request_hash: hashText(
         JSON.stringify({
           apartmentId,
@@ -187,7 +187,7 @@ function toBasicInfoPayload(
     apartment_id: context.apartmentId,
     raw_api_response_id: context.rawApiResponseId,
     source_name: KAPT_SOURCE_NAME,
-    source_ref: KAPT_BASIC_INFO_ENDPOINT,
+    source_ref: KAPT_BASIC_INFO_SOURCE_REF,
     kapt_code: basicInfo.kaptCode,
     kapt_name_from_source: basicInfo.kaptName,
     legal_address_from_source: basicInfo.legalAddress,

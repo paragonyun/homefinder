@@ -8,8 +8,13 @@ import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { apartments as mockApartments } from "@/lib/mock-data";
 import {
   apartmentStatusValues,
+  validateCommuteTimeInput,
   validateApartmentInput,
 } from "@/lib/forms/home-data";
+import {
+  buildCommuteSummaryByApartment,
+  type CommuteSummary,
+} from "@/lib/services/commute-summary";
 import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -17,6 +22,7 @@ import {
 import type {
   ApartmentAliasRow,
   ApartmentRowData,
+  CommuteTimeRow,
   NeighborhoodRow,
 } from "@/lib/supabase/table-types";
 import { statusLabels } from "@/lib/mock-data";
@@ -34,6 +40,10 @@ type ApartmentFormState = {
   molitAliases: string;
   kbUrl: string;
   naverLandUrl: string;
+  yeouidoDurationMinutes: string;
+  yeouidoTransferCount: string;
+  gangnamDurationMinutes: string;
+  gangnamTransferCount: string;
 };
 
 const emptyForm: ApartmentFormState = {
@@ -49,6 +59,10 @@ const emptyForm: ApartmentFormState = {
   molitAliases: "",
   kbUrl: "",
   naverLandUrl: "",
+  yeouidoDurationMinutes: "",
+  yeouidoTransferCount: "",
+  gangnamDurationMinutes: "",
+  gangnamTransferCount: "",
 };
 
 function parseAliasInput(value: string) {
@@ -66,6 +80,7 @@ export function ApartmentsClient() {
   const [session, setSession] = useState<Session | null>(null);
   const [apartments, setApartments] = useState<ApartmentRowData[]>([]);
   const [aliases, setAliases] = useState<ApartmentAliasRow[]>([]);
+  const [commuteTimes, setCommuteTimes] = useState<CommuteTimeRow[]>([]);
   const [neighborhoods, setNeighborhoods] = useState<NeighborhoodRow[]>([]);
   const [form, setForm] = useState<ApartmentFormState>(emptyForm);
   const [isLoading, setIsLoading] = useState(false);
@@ -84,6 +99,7 @@ export function ApartmentsClient() {
       { data: apartmentRows, error: apartmentError },
       { data: neighborhoodRows },
       { data: aliasRows, error: aliasError },
+      { data: commuteRows, error: commuteError },
     ] = await Promise.all([
         supabase
           .from("apartments")
@@ -94,6 +110,10 @@ export function ApartmentsClient() {
           .from("apartment_aliases")
           .select("*")
           .order("created_at", { ascending: true }),
+        supabase
+          .from("commute_times")
+          .select("*")
+          .order("fetched_at", { ascending: false }),
       ]);
 
     if (apartmentError) {
@@ -104,9 +124,18 @@ export function ApartmentsClient() {
       setAliases(
         aliasError?.code === "42P01" ? [] : ((aliasRows ?? []) as ApartmentAliasRow[]),
       );
+      setCommuteTimes(
+        isMissingTableError(commuteError)
+          ? []
+          : ((commuteRows ?? []) as CommuteTimeRow[]),
+      );
 
       if (aliasError && aliasError.code !== "42P01") {
         setMessage(aliasError.message);
+      }
+
+      if (commuteError && !isMissingTableError(commuteError)) {
+        setMessage(commuteError.message);
       }
     }
 
@@ -142,6 +171,7 @@ export function ApartmentsClient() {
       } else {
         setApartments([]);
         setAliases([]);
+        setCommuteTimes([]);
         setNeighborhoods([]);
       }
     });
@@ -153,6 +183,8 @@ export function ApartmentsClient() {
   }, [loadData, supabase]);
 
   const rows = useMemo(() => {
+    const commuteByApartmentId = buildCommuteSummaryByApartment(commuteTimes);
+
     if (!session) {
       return mockApartments;
     }
@@ -167,13 +199,16 @@ export function ApartmentsClient() {
       address: apartment.address ?? "주소 미입력",
       latestPrice: "실거래가 연동 전",
       areaSummary: "평형대 계산 전",
+      accessSummary: formatCommuteListSummary(
+        commuteByApartmentId.get(apartment.id) ?? null,
+      ),
       sourceState: [
         apartment.lawd_cd ? `법정동코드 ${apartment.lawd_cd}` : "법정동코드 필요",
         apartment.kapt_code ? `K-apt ${apartment.kapt_code}` : "K-apt 코드 필요",
       ].join(" / "),
       note: apartment.memo ?? "메모 없음",
     }));
-  }, [apartments, neighborhoods, session]);
+  }, [apartments, commuteTimes, neighborhoods, session]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -211,6 +246,14 @@ export function ApartmentsClient() {
 
       if (aliasError) {
         setMessage(aliasError);
+        setIsLoading(false);
+        return;
+      }
+
+      const commuteError = await saveCommuteTimes(savedApartment.id);
+
+      if (commuteError) {
+        setMessage(commuteError);
         setIsLoading(false);
         return;
       }
@@ -255,6 +298,78 @@ export function ApartmentsClient() {
     return insertError?.message ?? null;
   }
 
+  async function saveCommuteTimes(apartmentId: string) {
+    if (!supabase || !session) {
+      return null;
+    }
+
+    const inputs = [
+      {
+        apartmentId,
+        destinationKey: "yeouido_station",
+        durationMinutes: form.yeouidoDurationMinutes,
+        transferCount: form.yeouidoTransferCount,
+      },
+      {
+        apartmentId,
+        destinationKey: "gangnam_station",
+        durationMinutes: form.gangnamDurationMinutes,
+        transferCount: form.gangnamTransferCount,
+      },
+    ];
+    const payloads = [];
+
+    for (const input of inputs) {
+      const validated = validateCommuteTimeInput(input);
+
+      if (!validated.ok) {
+        return validated.error;
+      }
+
+      if (validated.value) {
+        payloads.push({
+          ...validated.value,
+          user_id: session.user.id,
+        });
+      }
+    }
+
+    const hasExistingCommute = commuteTimes.some(
+      (commuteTime) => commuteTime.apartment_id === apartmentId,
+    );
+
+    if (payloads.length === 0 && !hasExistingCommute) {
+      return null;
+    }
+
+    const { error: deleteError } = await supabase
+      .from("commute_times")
+      .delete()
+      .eq("apartment_id", apartmentId)
+      .eq("transport_type", "transit")
+      .in("destination_key", ["yeouido_station", "gangnam_station"]);
+
+    if (deleteError) {
+      return isMissingTableError(deleteError)
+        ? "접근성 저장을 위해 commute_times migration을 먼저 적용하세요."
+        : deleteError.message;
+    }
+
+    if (payloads.length === 0) {
+      return null;
+    }
+
+    const { error: insertError } = await supabase
+      .from("commute_times")
+      .insert(payloads);
+
+    return insertError
+      ? isMissingTableError(insertError)
+        ? "접근성 저장을 위해 commute_times migration을 먼저 적용하세요."
+        : insertError.message
+      : null;
+  }
+
   async function handleDelete(id: string) {
     if (!supabase || !session || !isAdmin) {
       return;
@@ -291,7 +406,46 @@ export function ApartmentsClient() {
         .join("\n"),
       kbUrl: apartment.kb_url ?? "",
       naverLandUrl: apartment.naver_land_url ?? "",
+      yeouidoDurationMinutes: getCommuteFormValue(
+        apartment.id,
+        "yeouido_station",
+        "duration",
+      ),
+      yeouidoTransferCount: getCommuteFormValue(
+        apartment.id,
+        "yeouido_station",
+        "transfer",
+      ),
+      gangnamDurationMinutes: getCommuteFormValue(
+        apartment.id,
+        "gangnam_station",
+        "duration",
+      ),
+      gangnamTransferCount: getCommuteFormValue(
+        apartment.id,
+        "gangnam_station",
+        "transfer",
+      ),
     });
+  }
+
+  function getCommuteFormValue(
+    apartmentId: string,
+    destinationKey: "yeouido_station" | "gangnam_station",
+    field: "duration" | "transfer",
+  ) {
+    const commuteTime = commuteTimes.find(
+      (item) =>
+        item.apartment_id === apartmentId &&
+        item.destination_key === destinationKey &&
+        item.transport_type === "transit",
+    );
+    const value =
+      field === "duration"
+        ? commuteTime?.duration_minutes
+        : commuteTime?.transfer_count;
+
+    return value !== null && value !== undefined ? String(value) : "";
   }
 
   return (
@@ -435,6 +589,53 @@ export function ApartmentsClient() {
                 placeholder="자동 수집이 아닌 참고 링크"
               />
             </label>
+            <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+              <div>
+                <p className="text-sm font-semibold text-slate-950">
+                  강남역/여의도역 접근성
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  현재는 지도 API 자동계산 전 단계입니다. 네이버지도/카카오맵 등에서
+                  확인한 대중교통 기준 시간을 수동 기록합니다.
+                </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <CommuteInputs
+                  title="여의도역"
+                  durationValue={form.yeouidoDurationMinutes}
+                  transferValue={form.yeouidoTransferCount}
+                  onDurationChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      yeouidoDurationMinutes: value,
+                    }))
+                  }
+                  onTransferChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      yeouidoTransferCount: value,
+                    }))
+                  }
+                />
+                <CommuteInputs
+                  title="강남역"
+                  durationValue={form.gangnamDurationMinutes}
+                  transferValue={form.gangnamTransferCount}
+                  onDurationChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      gangnamDurationMinutes: value,
+                    }))
+                  }
+                  onTransferChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      gangnamTransferCount: value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
             <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
               메모
               <textarea
@@ -514,6 +715,7 @@ export function ApartmentsClient() {
               <th className="px-4 py-3 font-semibold">상태</th>
               <th className="px-4 py-3 font-semibold">최근가</th>
               <th className="px-4 py-3 font-semibold">평형대</th>
+              <th className="px-4 py-3 font-semibold">접근성</th>
               <th className="px-4 py-3 font-semibold">데이터</th>
               <th className="px-4 py-3 font-semibold">메모</th>
               {session && isAdmin ? (
@@ -557,4 +759,77 @@ export function ApartmentsClient() {
       </div>
     </div>
   );
+}
+
+function CommuteInputs({
+  durationValue,
+  onDurationChange,
+  onTransferChange,
+  title,
+  transferValue,
+}: Readonly<{
+  durationValue: string;
+  onDurationChange: (value: string) => void;
+  onTransferChange: (value: string) => void;
+  title: string;
+  transferValue: string;
+}>) {
+  return (
+    <div className="grid gap-3 rounded-md border border-slate-200 bg-white p-3">
+      <p className="text-sm font-semibold text-slate-800">{title}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="grid gap-1 text-xs font-medium text-slate-600">
+          소요시간
+          <input
+            value={durationValue}
+            onChange={(event) => onDurationChange(event.target.value)}
+            inputMode="numeric"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            placeholder="분"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-medium text-slate-600">
+          환승
+          <input
+            value={transferValue}
+            onChange={(event) => onTransferChange(event.target.value)}
+            inputMode="numeric"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            placeholder="회"
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function formatCommuteListSummary(
+  summary: Record<
+    "yeouido_station" | "gangnam_station",
+    CommuteSummary | null
+  > | null,
+) {
+  if (!summary) {
+    return "접근성 미입력";
+  }
+
+  return [
+    formatCommuteLine("여의도", summary.yeouido_station),
+    formatCommuteLine("강남", summary.gangnam_station),
+  ].join(" / ");
+}
+
+function formatCommuteLine(
+  label: string,
+  commute: CommuteSummary | null,
+) {
+  if (!commute) {
+    return `${label} -`;
+  }
+
+  return `${label} ${commute.durationMinutes}분`;
+}
+
+function isMissingTableError(error: { code?: string } | null) {
+  return error?.code === "42P01" || error?.code === "PGRST205";
 }

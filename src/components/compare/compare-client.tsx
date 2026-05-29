@@ -11,6 +11,7 @@ import {
   filterComparisonRows,
   getComparisonMetrics,
   hasBasicInfo,
+  hasCommuteInfo,
   needsSync,
   type ComparisonDataFilter,
   type ComparisonStatusFilter,
@@ -23,6 +24,7 @@ import type {
   ApartmentBasicInfoRow,
   ApartmentRowData,
   ApartmentTransactionRow,
+  CommuteTimeRow,
 } from "@/lib/supabase/table-types";
 import { formatDate } from "@/utils/date";
 import { formatKrw } from "@/utils/format-price";
@@ -32,6 +34,7 @@ export function CompareClient() {
   const [apartments, setApartments] = useState<ApartmentRowData[]>([]);
   const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
   const [basicInfos, setBasicInfos] = useState<ApartmentBasicInfoRow[]>([]);
+  const [commuteTimes, setCommuteTimes] = useState<CommuteTimeRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -62,16 +65,17 @@ export function CompareClient() {
     const nextApartments = (apartmentData ?? []) as ApartmentRowData[];
     const apartmentIds = nextApartments.map((apartment) => apartment.id);
 
-    setApartments(nextApartments);
+      setApartments(nextApartments);
 
     if (apartmentIds.length === 0) {
       setTransactions([]);
       setBasicInfos([]);
+      setCommuteTimes([]);
       setIsLoading(false);
       return;
     }
 
-    const [transactionResult, basicInfoResult] = await Promise.all([
+    const [transactionResult, basicInfoResult, commuteResult] = await Promise.all([
       supabase
         .from("apartment_transactions")
         .select("*")
@@ -80,6 +84,11 @@ export function CompareClient() {
         .limit(2000),
       supabase
         .from("apartment_basic_info")
+        .select("*")
+        .in("apartment_id", apartmentIds)
+        .order("fetched_at", { ascending: false }),
+      supabase
+        .from("commute_times")
         .select("*")
         .in("apartment_id", apartmentIds)
         .order("fetched_at", { ascending: false }),
@@ -103,6 +112,16 @@ export function CompareClient() {
       setBasicInfos([]);
     } else {
       setBasicInfos((basicInfoResult.data ?? []) as ApartmentBasicInfoRow[]);
+    }
+
+    if (commuteResult.error) {
+      if (!isMissingTableError(commuteResult.error)) {
+        messages.push(commuteResult.error.message);
+      }
+
+      setCommuteTimes([]);
+    } else {
+      setCommuteTimes((commuteResult.data ?? []) as CommuteTimeRow[]);
     }
 
     if (messages.length > 0) {
@@ -146,6 +165,7 @@ export function CompareClient() {
         setApartments([]);
         setTransactions([]);
         setBasicInfos([]);
+        setCommuteTimes([]);
       }
     });
 
@@ -156,8 +176,14 @@ export function CompareClient() {
   }, [loadData, supabase]);
 
   const rows = useMemo(
-    () => buildApartmentComparisonRows(apartments, transactions, basicInfos),
-    [apartments, transactions, basicInfos],
+    () =>
+      buildApartmentComparisonRows(
+        apartments,
+        transactions,
+        basicInfos,
+        commuteTimes,
+      ),
+    [apartments, basicInfos, commuteTimes, transactions],
   );
   const filteredRows = useMemo(
     () =>
@@ -217,15 +243,16 @@ export function CompareClient() {
                   같은 기준으로 비교합니다.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
                 <Metric label="등록 단지" value={`${metrics.total}개`} />
                 <Metric label="가격 데이터" value={`${metrics.withPrice}개`} />
                 <Metric label="K-apt 정보" value={`${metrics.withKapt}개`} />
+                <Metric label="접근성" value={`${metrics.withCommute}개`} />
                 <Metric label="동기화 필요" value={`${metrics.needsSync}개`} />
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_180px]">
+            <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_200px]">
               <label className="grid gap-1 text-xs font-semibold text-slate-500">
                 검색
                 <input
@@ -268,6 +295,8 @@ export function CompareClient() {
                   <option value="missing-price">가격 없음</option>
                   <option value="has-kapt">K-apt 있음</option>
                   <option value="missing-kapt">K-apt 없음</option>
+                  <option value="has-commute">접근성 있음</option>
+                  <option value="missing-commute">접근성 없음</option>
                   <option value="needs-sync">동기화 필요</option>
                 </select>
               </label>
@@ -316,7 +345,7 @@ function ComparisonMatrix({
   return (
     <>
       <div className="hidden overflow-x-auto lg:block">
-        <table className="w-full min-w-[1080px] text-left">
+        <table className="w-full min-w-[1180px] text-left">
           <thead className="sticky top-[74px] z-10 bg-slate-50 text-xs uppercase tracking-[0.08em] text-slate-500">
           <tr>
             <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3 font-semibold">
@@ -326,6 +355,7 @@ function ComparisonMatrix({
             <th className="px-4 py-3 font-semibold">최근 실거래가</th>
             <th className="px-4 py-3 font-semibold">평형대 요약</th>
             <th className="px-4 py-3 font-semibold">K-apt 기본정보</th>
+            <th className="px-4 py-3 font-semibold">접근성</th>
             <th className="px-4 py-3 font-semibold">데이터 상태</th>
           </tr>
         </thead>
@@ -392,6 +422,9 @@ function ComparisonMatrix({
               <td className="px-4 py-4 align-top text-sm text-slate-700">
                 <BasicInfoSummary row={row} />
               </td>
+              <td className="px-4 py-4 align-top text-sm text-slate-700">
+                <CommuteSummaryView row={row} />
+              </td>
               <td className="px-4 py-4 align-top text-sm leading-6 text-slate-700">
                 <DataQuality row={row} />
                 {row.memo ? (
@@ -454,6 +487,14 @@ function ComparisonMatrix({
                 label="주차/세대"
                 value={formatParkingPerHousehold(row.parkingPerHousehold)}
               />
+              <MiniMetric
+                label="여의도"
+                value={formatCommuteDuration(row.commuteToYeouido)}
+              />
+              <MiniMetric
+                label="강남"
+                value={formatCommuteDuration(row.commuteToGangnam)}
+              />
             </div>
             <div className="mt-4">
               <DataQuality row={row} />
@@ -497,6 +538,24 @@ function BasicInfoSummary({
   );
 }
 
+function CommuteSummaryView({
+  row,
+}: Readonly<{
+  row: ReturnType<typeof buildApartmentComparisonRows>[number];
+}>) {
+  if (!row.commuteToYeouido && !row.commuteToGangnam) {
+    return <span className="text-slate-500">접근성 미입력</span>;
+  }
+
+  return (
+    <div className="grid gap-1">
+      <p>여의도 {formatCommuteDuration(row.commuteToYeouido)}</p>
+      <p>강남 {formatCommuteDuration(row.commuteToGangnam)}</p>
+      <p className="text-xs text-slate-500">대중교통 기준</p>
+    </div>
+  );
+}
+
 function DataQuality({
   row,
 }: Readonly<{
@@ -511,6 +570,10 @@ function DataQuality({
       <QualityBadge
         tone={hasBasicInfo(row) ? "good" : "missing"}
         label={hasBasicInfo(row) ? "K-apt 있음" : "K-apt 필요"}
+      />
+      <QualityBadge
+        tone={hasCommuteInfo(row) ? "good" : "missing"}
+        label={hasCommuteInfo(row) ? "접근성 있음" : "접근성 필요"}
       />
       {needsSync(row) ? (
         <QualityBadge tone="warn" label="동기화 필요" />
@@ -623,6 +686,19 @@ function formatParkingPerHousehold(value: number | null) {
 
 function formatBuildingAge(value: number | null) {
   return value !== null ? `${value.toLocaleString("ko-KR")}년` : "-";
+}
+
+function formatCommuteDuration(
+  value: ReturnType<typeof buildApartmentComparisonRows>[number]["commuteToYeouido"],
+) {
+  if (!value) {
+    return "-";
+  }
+
+  const transfers =
+    value.transferCount !== null ? ` · 환승 ${value.transferCount}회` : "";
+
+  return `${value.durationMinutes.toLocaleString("ko-KR")}분${transfers}`;
 }
 
 function isMissingTableError(error: { code?: string }) {

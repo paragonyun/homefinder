@@ -239,7 +239,7 @@ K-apt 단지 코드 후보 검색용 캐시입니다. 공식 단지 목록 API �
 
 ### commute_times
 
-목적지별 대중교통 소요시간, 도보 시간, 환승 횟수, 기준 시각, 출처를 저장합니다.
+목적지별 대중교통 소요시간, 도보 시간, 환승 횟수, 기준 시각, 출처를 저장합니다. 현재 구현은 기본 목적지 `yeouido_station`/`gangnam_station`의 대중교통 시간을 운영자가 수동 입력하는 단계입니다.
 
 - `source_name text`
 - `source_ref text`

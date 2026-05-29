@@ -11,6 +11,7 @@ type ApartmentRowProps = {
   address: string;
   latestPrice: string;
   areaSummary: string;
+  accessSummary?: string;
   sourceState: string;
   note: string;
   children?: ReactNode;
@@ -34,6 +35,9 @@ export function ApartmentRow(props: Readonly<ApartmentRowProps>) {
       </td>
       <td className="px-4 py-4 text-sm text-slate-700">{props.latestPrice}</td>
       <td className="px-4 py-4 text-sm text-slate-700">{props.areaSummary}</td>
+      <td className="px-4 py-4 text-sm leading-6 text-slate-700">
+        {props.accessSummary ?? "접근성 미입력"}
+      </td>
       <td className="px-4 py-4 text-sm text-slate-700">{props.sourceState}</td>
       <td className="px-4 py-4 text-sm leading-6 text-slate-700">{props.note}</td>
       {props.children ? (

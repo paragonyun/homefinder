@@ -8,6 +8,10 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { apartments as mockApartments } from "@/lib/mock-data";
 import {
+  buildCommuteSummaryByApartment,
+  type CommuteSummary,
+} from "@/lib/services/commute-summary";
+import {
   buildLinearTicks,
   getVisibleMonthLabels,
 } from "@/lib/services/chart-scale";
@@ -27,6 +31,7 @@ import type {
   ApartmentBasicInfoRow,
   ApartmentRowData,
   ApartmentTransactionRow,
+  CommuteTimeRow,
 } from "@/lib/supabase/table-types";
 import { formatDate } from "@/utils/date";
 import { formatKrw } from "@/utils/format-price";
@@ -76,7 +81,6 @@ type KaptCodeResolveResult = {
 const sections = [
   ["건축정보", "건축물대장 후보 데이터가 확보되면 용적률, 건폐율, 대지면적을 표시합니다."],
   ["학군", "NEIS 학교기본정보와 거리 계산을 MVP 2에서 연결합니다."],
-  ["접근성", "여의도역/강남역과 커스텀 목적지 소요시간을 표시합니다."],
   ["임장 후기", "모바일 입력 화면과 사진 업로드를 연결합니다."],
   ["내 판단", "관심/보류/제외 상태와 추가 확인사항을 남깁니다."],
   ["데이터 출처", "source, fetched_at, confidence_level을 함께 표시합니다."],
@@ -90,6 +94,7 @@ export function ApartmentDetailClient({
   const [apartment, setApartment] = useState<ApartmentRowData | null>(null);
   const [basicInfo, setBasicInfo] = useState<ApartmentBasicInfoRow | null>(null);
   const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
+  const [commuteTimes, setCommuteTimes] = useState<CommuteTimeRow[]>([]);
   const [candidateNames, setCandidateNames] = useState<
     Array<{ name: string; count: number }>
   >([]);
@@ -116,6 +121,7 @@ export function ApartmentDetailClient({
       setApartment(null);
       setBasicInfo(null);
       setTransactions([]);
+      setCommuteTimes([]);
       return;
     }
 
@@ -123,6 +129,7 @@ export function ApartmentDetailClient({
       { data: apartmentData, error: apartmentError },
       { data: basicInfoData, error: basicInfoError },
       { data: transactionData, error: transactionError },
+      { data: commuteData, error: commuteError },
     ] = await Promise.all([
       supabase
         .from("apartments")
@@ -142,6 +149,11 @@ export function ApartmentDetailClient({
         .eq("apartment_id", apartmentId)
         .order("deal_date", { ascending: false })
         .limit(240),
+      supabase
+        .from("commute_times")
+        .select("*")
+        .eq("apartment_id", apartmentId)
+        .order("fetched_at", { ascending: false }),
     ]);
 
     if (apartmentError) {
@@ -164,6 +176,14 @@ export function ApartmentDetailClient({
       setMessage(transactionError.message);
     } else {
       setTransactions((transactionData ?? []) as ApartmentTransactionRow[]);
+    }
+
+    if (commuteError && !isMissingTableError(commuteError)) {
+      setMessage(commuteError.message);
+    } else {
+      setCommuteTimes(
+        commuteError ? [] : ((commuteData ?? []) as CommuteTimeRow[]),
+      );
     }
   }, [apartmentId, mockApartment, supabase]);
 
@@ -195,6 +215,7 @@ export function ApartmentDetailClient({
         setApartment(null);
         setBasicInfo(null);
         setTransactions([]);
+        setCommuteTimes([]);
       }
     });
 
@@ -443,6 +464,10 @@ export function ApartmentDetailClient({
     [latestTransactionMonth, transactions],
   );
   const latestSummary = priceSummary.areaSummaries[0] ?? null;
+  const commuteSummary = useMemo(
+    () => buildCommuteSummaryByApartment(commuteTimes).get(apartmentId) ?? null,
+    [apartmentId, commuteTimes],
+  );
   const totalTransactionCount = priceSummary.areaSummaries.reduce(
     (sum, summary) => sum + summary.transactionCount,
     0,
@@ -493,7 +518,7 @@ export function ApartmentDetailClient({
             ) : null}
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
             <HeroMetric
               label="최근 실거래가"
               value={
@@ -509,6 +534,16 @@ export function ApartmentDetailClient({
               label="저장 거래"
               value={`${totalTransactionCount.toLocaleString("ko-KR")}건`}
               detail="취소 거래 제외"
+            />
+            <HeroMetric
+              label="여의도역"
+              value={formatCommuteMetric(commuteSummary?.yeouido_station ?? null)}
+              detail="대중교통"
+            />
+            <HeroMetric
+              label="강남역"
+              value={formatCommuteMetric(commuteSummary?.gangnam_station ?? null)}
+              detail="대중교통"
             />
             <HeroMetric
               label="세대수"
@@ -531,6 +566,28 @@ export function ApartmentDetailClient({
               detail="최근 K-apt 반영"
             />
           </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div>
+          <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+            강남역/여의도역 접근성
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            단지 관리 화면에서 저장한 대중교통 기준 소요시간과 환승 수를
+            표시합니다.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <CommuteAccessCard
+            title="여의도역"
+            commute={commuteSummary?.yeouido_station ?? null}
+          />
+          <CommuteAccessCard
+            title="강남역"
+            commute={commuteSummary?.gangnam_station ?? null}
+          />
         </div>
       </section>
 
@@ -890,6 +947,44 @@ function HeroMetric({
       <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
     </div>
   );
+}
+
+function CommuteAccessCard({
+  commute,
+  title,
+}: Readonly<{ commute: CommuteSummary | null; title: string }>) {
+  return (
+    <article className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-950">{title}</p>
+          <p className="mt-1 text-xs text-slate-500">대중교통 기준</p>
+        </div>
+        <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
+          {commute?.confidenceLevel === "manual" ? "수동" : "저장됨"}
+        </span>
+      </div>
+      <p className="mt-4 text-2xl font-semibold text-slate-950">
+        {formatCommuteMetric(commute)}
+      </p>
+      <p className="mt-2 text-sm text-slate-600">
+        {commute
+          ? commute.transferCount !== null
+            ? `환승 ${commute.transferCount}회`
+            : "환승 정보 없음"
+          : "단지 관리 화면에서 소요시간을 입력하세요."}
+      </p>
+      {commute?.fetchedAt ? (
+        <p className="mt-3 text-xs text-slate-500">
+          갱신 {formatDate(commute.fetchedAt)}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+function formatCommuteMetric(commute: CommuteSummary | null) {
+  return commute ? `${commute.durationMinutes.toLocaleString("ko-KR")}분` : "-";
 }
 
 function SyncStatusPanel({

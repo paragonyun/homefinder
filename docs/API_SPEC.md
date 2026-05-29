@@ -84,10 +84,10 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 ## Schools / Commute
 
 - `GET /api/apartments/:id/schools`
-- `GET /api/apartments/:id/commute`
-- `POST /api/apartments/:id/commute/refresh`
+- `GET /api/apartments/:id/commute` (planned)
+- `POST /api/apartments/:id/commute/refresh` (planned)
 
-교통 소요시간은 기준 시각과 출처를 함께 반환합니다.
+현재 구현은 별도 route 없이 Supabase `commute_times` 테이블을 클라이언트에서 읽고 씁니다. 운영자는 단지 관리 화면에서 여의도역/강남역 대중교통 소요시간과 환승 수를 수동 입력하고, 상세/비교 화면에서 확인합니다. 지도 API 자동계산이 붙으면 위 route가 원천 응답 저장과 refresh를 담당합니다.
 
 ## Field Notes
 

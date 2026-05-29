@@ -1,4 +1,9 @@
 import type { ApartmentStatus } from "@/types/apartment";
+import {
+  commuteDestinationKeys,
+  defaultCommuteDestinations,
+  type CommuteDestinationKey,
+} from "../../types/commute";
 
 type ValidationResult<T> =
   | { ok: true; value: T }
@@ -60,6 +65,34 @@ function cleanRating(value: unknown): ValidationResult<number | null> {
   }
 
   return { ok: true, value: rating };
+}
+
+function cleanOptionalInteger(
+  value: unknown,
+  label: string,
+  min: number,
+  max: number,
+): ValidationResult<number | null> {
+  const text = cleanText(value);
+
+  if (!text) {
+    return { ok: true, value: null };
+  }
+
+  const number = Number(text);
+
+  if (!Number.isInteger(number) || number < min || number > max) {
+    return {
+      ok: false,
+      error: `${formatKoreanTopic(label)} ${min}에서 ${max} 사이의 정수로 입력하세요.`,
+    };
+  }
+
+  return { ok: true, value: number };
+}
+
+function formatKoreanTopic(label: string) {
+  return label.endsWith("수") ? `${label}는` : `${label}은`;
 }
 
 export type NeighborhoodInput = {
@@ -213,4 +246,97 @@ export function validateFieldNoteInput(
       overall_memo: cleanText(input.overallMemo),
     },
   };
+}
+
+export type CommuteTimeInput = {
+  apartmentId?: unknown;
+  destinationKey?: unknown;
+  durationMinutes?: unknown;
+  transferCount?: unknown;
+};
+
+export type CommuteTimePayload = {
+  apartment_id: string;
+  destination_key: CommuteDestinationKey;
+  destination_name: string;
+  destination_lat: number;
+  destination_lng: number;
+  transport_type: "transit";
+  duration_minutes: number;
+  transfer_count: number | null;
+  source_name: "manual";
+  source_ref: null;
+  query_datetime: null;
+  confidence_level: "manual";
+};
+
+export function validateCommuteTimeInput(
+  input: CommuteTimeInput,
+): ValidationResult<CommuteTimePayload | null> {
+  const apartmentId = cleanRequiredText(input.apartmentId);
+
+  if (!apartmentId) {
+    return { ok: false, error: "단지 정보가 필요합니다." };
+  }
+
+  const destinationKey = cleanText(input.destinationKey);
+
+  if (!isCommuteDestinationKey(destinationKey)) {
+    return { ok: false, error: "알 수 없는 접근성 목적지입니다." };
+  }
+
+  const duration = cleanOptionalInteger(input.durationMinutes, "소요시간", 1, 300);
+
+  if (!duration.ok) {
+    return duration;
+  }
+
+  const transferCount = cleanOptionalInteger(input.transferCount, "환승 수", 0, 10);
+
+  if (!transferCount.ok) {
+    return transferCount;
+  }
+
+  if (duration.value === null) {
+    if (transferCount.value !== null) {
+      return { ok: false, error: "환승 수를 저장하려면 소요시간을 입력하세요." };
+    }
+
+    return { ok: true, value: null };
+  }
+
+  const destination = defaultCommuteDestinations.find(
+    (item) => item.key === destinationKey,
+  );
+
+  if (!destination) {
+    return { ok: false, error: "알 수 없는 접근성 목적지입니다." };
+  }
+
+  return {
+    ok: true,
+    value: {
+      apartment_id: apartmentId,
+      destination_key: destinationKey,
+      destination_name: destination.name,
+      destination_lat: destination.lat,
+      destination_lng: destination.lng,
+      transport_type: "transit",
+      duration_minutes: duration.value,
+      transfer_count: transferCount.value,
+      source_name: "manual",
+      source_ref: null,
+      query_datetime: null,
+      confidence_level: "manual",
+    },
+  };
+}
+
+function isCommuteDestinationKey(
+  value: string | null,
+): value is CommuteDestinationKey {
+  return (
+    value !== null &&
+    commuteDestinationKeys.includes(value as CommuteDestinationKey)
+  );
 }

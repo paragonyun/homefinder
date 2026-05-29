@@ -1,5 +1,10 @@
 import type { ApartmentStatus } from "../../types/apartment";
 import {
+  buildCommuteSummaryByApartment,
+  type CommuteSummary,
+  type CommuteTimeLike,
+} from "./commute-summary";
+import {
   summarizeApartmentPrices,
   type PriceSummaryTransaction,
 } from "./price-summary";
@@ -27,6 +32,8 @@ export type ComparisonBasicInfo = {
   fetched_at: string | null;
 };
 
+export type ComparisonCommuteTime = CommuteTimeLike;
+
 export type ApartmentComparisonRow = {
   id: string;
   name: string;
@@ -45,6 +52,8 @@ export type ApartmentComparisonRow = {
   approvalDate: string | null;
   buildingAgeYears: number | null;
   basicInfoFetchedAt: string | null;
+  commuteToYeouido: CommuteSummary | null;
+  commuteToGangnam: CommuteSummary | null;
   areaSummaries: Array<{
     areaBucket: string;
     latestDealDate: string;
@@ -58,8 +67,11 @@ export function buildApartmentComparisonRows(
   apartments: ComparisonApartment[],
   transactions: ComparisonTransaction[],
   basicInfos: ComparisonBasicInfo[] = [],
+  commuteTimes: ComparisonCommuteTime[] = [],
 ): ApartmentComparisonRow[] {
   const latestBasicInfoByApartmentId = getLatestBasicInfoByApartmentId(basicInfos);
+  const commuteSummaryByApartmentId =
+    buildCommuteSummaryByApartment(commuteTimes);
 
   return apartments.map((apartment) => {
     const apartmentTransactions = transactions.filter(
@@ -72,6 +84,7 @@ export function buildApartmentComparisonRows(
       0,
     );
     const basicInfo = latestBasicInfoByApartmentId.get(apartment.id) ?? null;
+    const commuteSummary = commuteSummaryByApartmentId.get(apartment.id) ?? null;
 
     return {
       id: apartment.id,
@@ -94,6 +107,8 @@ export function buildApartmentComparisonRows(
       approvalDate: basicInfo?.approval_date ?? null,
       buildingAgeYears: getBuildingAgeYears(basicInfo?.approval_date ?? null),
       basicInfoFetchedAt: basicInfo?.fetched_at ?? null,
+      commuteToYeouido: commuteSummary?.yeouido_station ?? null,
+      commuteToGangnam: commuteSummary?.gangnam_station ?? null,
       areaSummaries: priceSummary.areaSummaries.map((summary) => ({
         areaBucket: summary.areaBucket,
         latestDealDate: summary.latestDealDate,

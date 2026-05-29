@@ -86,6 +86,26 @@ export type ApartmentBasicInfoRow = {
   updated_at: string;
 };
 
+export type CommuteTimeRow = {
+  id: string;
+  user_id: string;
+  apartment_id: string;
+  destination_key: "yeouido_station" | "gangnam_station";
+  destination_name: string;
+  destination_lat: number | null;
+  destination_lng: number | null;
+  transport_type: "transit" | "walking" | "driving";
+  duration_minutes: number | null;
+  transfer_count: number | null;
+  source_name: string;
+  source_ref: string | null;
+  query_datetime: string | null;
+  confidence_level: "high" | "medium" | "low" | "manual" | "unknown";
+  fetched_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ApartmentAliasRow = {
   id: string;
   user_id: string;

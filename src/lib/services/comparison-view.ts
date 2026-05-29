@@ -7,6 +7,8 @@ export type ComparisonDataFilter =
   | "missing-price"
   | "has-kapt"
   | "missing-kapt"
+  | "has-commute"
+  | "missing-commute"
   | "needs-sync";
 
 export type ComparisonStatusFilter = "all" | ApartmentStatus;
@@ -41,6 +43,7 @@ export function getComparisonMetrics(rows: ApartmentComparisonRow[]) {
     total: rows.length,
     withPrice: rows.filter((row) => row.transactionCount > 0).length,
     withKapt: rows.filter((row) => hasBasicInfo(row)).length,
+    withCommute: rows.filter((row) => hasCommuteInfo(row)).length,
     needsSync: rows.filter((row) => needsSync(row)).length,
   };
 }
@@ -56,6 +59,10 @@ export function hasBasicInfo(row: ApartmentComparisonRow) {
 
 export function needsSync(row: ApartmentComparisonRow) {
   return row.transactionCount === 0 || !hasBasicInfo(row);
+}
+
+export function hasCommuteInfo(row: ApartmentComparisonRow) {
+  return Boolean(row.commuteToYeouido || row.commuteToGangnam);
 }
 
 function matchesDataFilter(
@@ -76,6 +83,14 @@ function matchesDataFilter(
 
   if (filter === "missing-kapt") {
     return !hasBasicInfo(row);
+  }
+
+  if (filter === "has-commute") {
+    return hasCommuteInfo(row);
+  }
+
+  if (filter === "missing-commute") {
+    return !hasCommuteInfo(row);
   }
 
   if (filter === "needs-sync") {

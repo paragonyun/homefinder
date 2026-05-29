@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ApartmentComparisonRow } from "./apartment-comparison";
-import { filterComparisonRows, getComparisonMetrics } from "./comparison-view";
+import {
+  filterComparisonRows,
+  getComparisonMetrics,
+  hasCommuteInfo,
+} from "./comparison-view";
 
 const rows: ApartmentComparisonRow[] = [
   {
@@ -21,6 +25,18 @@ const rows: ApartmentComparisonRow[] = [
     approvalDate: "1999-01-01",
     buildingAgeYears: 27,
     basicInfoFetchedAt: "2026-05-21T00:00:00Z",
+    commuteToYeouido: {
+      destinationKey: "yeouido_station",
+      destinationName: "여의도역",
+      durationMinutes: 32,
+      transferCount: 1,
+      sourceName: "manual",
+      sourceRef: null,
+      queryDatetime: null,
+      confidenceLevel: "manual",
+      fetchedAt: "2026-05-29T00:00:00Z",
+    },
+    commuteToGangnam: null,
     areaSummaries: [],
   },
   {
@@ -41,6 +57,8 @@ const rows: ApartmentComparisonRow[] = [
     approvalDate: null,
     buildingAgeYears: null,
     basicInfoFetchedAt: null,
+    commuteToYeouido: null,
+    commuteToGangnam: null,
     areaSummaries: [],
   },
 ];
@@ -59,7 +77,7 @@ describe("comparison view helpers", () => {
       filterComparisonRows(rows, {
         query: "",
         status: "all",
-        data: "missing-price",
+        data: "missing-commute",
       }).map((row) => row.id),
     ).toEqual(["b"]);
   });
@@ -69,7 +87,13 @@ describe("comparison view helpers", () => {
       total: 2,
       withPrice: 1,
       withKapt: 1,
+      withCommute: 1,
       needsSync: 1,
     });
+  });
+
+  it("detects rows with either Yeouido or Gangnam commute data", () => {
+    expect(hasCommuteInfo(rows[0])).toBe(true);
+    expect(hasCommuteInfo(rows[1])).toBe(false);
   });
 });

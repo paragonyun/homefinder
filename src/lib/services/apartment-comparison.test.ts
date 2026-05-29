@@ -68,6 +68,8 @@ describe("buildApartmentComparisonRows", () => {
         approvalDate: null,
         buildingAgeYears: null,
         basicInfoFetchedAt: null,
+        commuteToYeouido: null,
+        commuteToGangnam: null,
         areaSummaries: [
           {
             areaBucket: "84",
@@ -96,6 +98,8 @@ describe("buildApartmentComparisonRows", () => {
         approvalDate: null,
         buildingAgeYears: null,
         basicInfoFetchedAt: null,
+        commuteToYeouido: null,
+        commuteToGangnam: null,
         areaSummaries: [
           {
             areaBucket: "59",
@@ -152,5 +156,62 @@ describe("buildApartmentComparisonRows", () => {
     });
     expect(rows[0].parkingPerHousehold).toBeCloseTo(4_102 / 3_544, 5);
     expect(rows[0].buildingAgeYears).toBeGreaterThanOrEqual(20);
+  });
+
+  it("merges commute times for Yeouido and Gangnam access comparison", () => {
+    const rows = buildApartmentComparisonRows(
+      [
+        {
+          id: "apt-1",
+          name: "관악드림타운",
+          display_name: null,
+          address: null,
+          lawd_cd: null,
+          status: "candidate",
+          memo: null,
+        },
+      ],
+      [],
+      [],
+      [
+        {
+          apartment_id: "apt-1",
+          destination_key: "yeouido_station",
+          destination_name: "여의도역",
+          transport_type: "transit",
+          duration_minutes: 32,
+          transfer_count: 1,
+          source_name: "manual",
+          source_ref: null,
+          query_datetime: null,
+          confidence_level: "manual",
+          fetched_at: "2026-05-29T10:00:00.000Z",
+        },
+        {
+          apartment_id: "apt-1",
+          destination_key: "gangnam_station",
+          destination_name: "강남역",
+          transport_type: "transit",
+          duration_minutes: 47,
+          transfer_count: 2,
+          source_name: "manual",
+          source_ref: null,
+          query_datetime: null,
+          confidence_level: "manual",
+          fetched_at: "2026-05-29T10:00:00.000Z",
+        },
+      ],
+    );
+
+    expect(rows[0].commuteToYeouido).toMatchObject({
+      destinationName: "여의도역",
+      durationMinutes: 32,
+      transferCount: 1,
+    });
+    expect(rows[0].commuteToGangnam).toMatchObject({
+      destinationName: "강남역",
+      durationMinutes: 47,
+      transferCount: 2,
+    });
   });
 });

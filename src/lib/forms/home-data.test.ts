@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  validateCommuteTimeInput,
   validateApartmentInput,
   validateFieldNoteInput,
   validateNeighborhoodInput,
@@ -137,6 +138,86 @@ describe("validateFieldNoteInput", () => {
         bad_points: null,
         overall_memo: "다시 볼 의향 있음",
       },
+    });
+  });
+});
+
+describe("validateCommuteTimeInput", () => {
+  it("builds a manual Yeouido commute payload", () => {
+    expect(
+      validateCommuteTimeInput({
+        apartmentId: "apt-1",
+        destinationKey: "yeouido_station",
+        durationMinutes: " 32 ",
+        transferCount: "1",
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        apartment_id: "apt-1",
+        destination_key: "yeouido_station",
+        destination_name: "여의도역",
+        destination_lat: 37.521624,
+        destination_lng: 126.924191,
+        transport_type: "transit",
+        duration_minutes: 32,
+        transfer_count: 1,
+        source_name: "manual",
+        source_ref: null,
+        query_datetime: null,
+        confidence_level: "manual",
+      },
+    });
+  });
+
+  it("treats an empty duration as no commute value to save", () => {
+    expect(
+      validateCommuteTimeInput({
+        apartmentId: "apt-1",
+        destinationKey: "gangnam_station",
+        durationMinutes: "",
+        transferCount: "",
+      }),
+    ).toEqual({
+      ok: true,
+      value: null,
+    });
+  });
+
+  it("rejects invalid duration and transfer ranges", () => {
+    expect(
+      validateCommuteTimeInput({
+        apartmentId: "apt-1",
+        destinationKey: "gangnam_station",
+        durationMinutes: "301",
+      }),
+    ).toEqual({
+      ok: false,
+      error: "소요시간은 1에서 300 사이의 정수로 입력하세요.",
+    });
+
+    expect(
+      validateCommuteTimeInput({
+        apartmentId: "apt-1",
+        destinationKey: "gangnam_station",
+        durationMinutes: "",
+        transferCount: "1",
+      }),
+    ).toEqual({
+      ok: false,
+      error: "환승 수를 저장하려면 소요시간을 입력하세요.",
+    });
+
+    expect(
+      validateCommuteTimeInput({
+        apartmentId: "apt-1",
+        destinationKey: "gangnam_station",
+        durationMinutes: "45",
+        transferCount: "11",
+      }),
+    ).toEqual({
+      ok: false,
+      error: "환승 수는 0에서 10 사이의 정수로 입력하세요.",
     });
   });
 });

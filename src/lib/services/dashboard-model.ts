@@ -72,6 +72,7 @@ export type DashboardNeighborhoodSummary = {
   gangnamSummary: string;
   yeouidoSummary: string;
   missingBadges: string[];
+  apartmentSummaries: DashboardApartmentSummary[];
   representativeApartments: DashboardApartmentSummary[];
   updatedAt: string;
 };
@@ -162,10 +163,8 @@ function summarizeNeighborhood(
   const yeouidoValues = apartmentSummaries
     .map((summary) => summary.yeouidoMinutes)
     .filter((value): value is number => value !== null);
-  const representativeApartments = rankPriorityApartments(apartmentSummaries).slice(
-    0,
-    2,
-  );
+  const sortedApartments = sortPriorityApartments(apartmentSummaries);
+  const representativeApartments = sortedApartments.slice(0, 2);
   const missingBadges = [
     priceValues.length === 0 ? "가격 미확인" : null,
     gangnamValues.length === 0 && yeouidoValues.length === 0
@@ -188,6 +187,7 @@ function summarizeNeighborhood(
     gangnamSummary: formatCommuteSummary(gangnamValues, "강남"),
     yeouidoSummary: formatCommuteSummary(yeouidoValues, "여의도"),
     missingBadges,
+    apartmentSummaries: sortedApartments,
     representativeApartments,
     updatedAt: neighborhood.updated_at,
   };
@@ -238,10 +238,17 @@ function summarizeApartment({
 }
 
 function rankPriorityApartments(apartments: DashboardApartmentSummary[]) {
+  return sortPriorityApartments(apartments).slice(0, 5);
+}
+
+function sortPriorityApartments(apartments: DashboardApartmentSummary[]) {
   return [...apartments]
     .filter((apartment) => apartment.status !== "excluded")
-    .sort((left, right) => getPriorityScore(right) - getPriorityScore(left))
-    .slice(0, 5);
+    .sort(
+      (left, right) =>
+        getPriorityScore(right) - getPriorityScore(left) ||
+        left.name.localeCompare(right.name, "ko-KR"),
+    );
 }
 
 function getPriorityScore(apartment: DashboardApartmentSummary) {

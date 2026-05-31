@@ -122,6 +122,10 @@ describe("buildDashboardModel", () => {
       yeouidoSummary: "대중교통 42분",
       missingBadges: [],
     });
+    expect(model.neighborhoods[0].apartmentSummaries.map((item) => item.id)).toEqual([
+      "dream",
+      "honors",
+    ]);
     expect(model.neighborhoods[0].representativeApartments).toHaveLength(2);
     expect(model.neighborhoods[0].representativeApartments[0]).toMatchObject({
       id: "dream",

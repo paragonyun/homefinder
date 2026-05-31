@@ -70,6 +70,8 @@ describe("buildApartmentComparisonRows", () => {
         basicInfoFetchedAt: null,
         commuteToYeouido: null,
         commuteToGangnam: null,
+        driveToYeouido: null,
+        driveToGangnam: null,
         areaSummaries: [
           {
             areaBucket: "84",
@@ -100,6 +102,8 @@ describe("buildApartmentComparisonRows", () => {
         basicInfoFetchedAt: null,
         commuteToYeouido: null,
         commuteToGangnam: null,
+        driveToYeouido: null,
+        driveToGangnam: null,
         areaSummaries: [
           {
             areaBucket: "59",
@@ -200,6 +204,19 @@ describe("buildApartmentComparisonRows", () => {
           confidence_level: "manual",
           fetched_at: "2026-05-29T10:00:00.000Z",
         },
+        {
+          apartment_id: "apt-1",
+          destination_key: "gangnam_station",
+          destination_name: "강남역",
+          transport_type: "driving",
+          duration_minutes: 35,
+          transfer_count: null,
+          source_name: "tmap-driving",
+          source_ref: null,
+          query_datetime: null,
+          confidence_level: "high",
+          fetched_at: "2026-05-29T10:00:00.000Z",
+        },
       ],
     );
 
@@ -212,6 +229,11 @@ describe("buildApartmentComparisonRows", () => {
       destinationName: "강남역",
       durationMinutes: 47,
       transferCount: 2,
+    });
+    expect(rows[0].driveToGangnam).toMatchObject({
+      destinationName: "강남역",
+      durationMinutes: 35,
+      transportType: "driving",
     });
   });
 });

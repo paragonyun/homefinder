@@ -12,7 +12,8 @@ import {
   validateApartmentInput,
 } from "@/lib/forms/home-data";
 import {
-  buildCommuteSummaryByApartment,
+  buildCommuteAccessSummaryByApartment,
+  type CommuteAccessSummary,
   type CommuteSummary,
 } from "@/lib/services/commute-summary";
 import {
@@ -183,7 +184,7 @@ export function ApartmentsClient() {
   }, [loadData, supabase]);
 
   const rows = useMemo(() => {
-    const commuteByApartmentId = buildCommuteSummaryByApartment(commuteTimes);
+    const commuteByApartmentId = buildCommuteAccessSummaryByApartment(commuteTimes);
 
     if (!session) {
       return mockApartments;
@@ -804,30 +805,34 @@ function CommuteInputs({
 }
 
 function formatCommuteListSummary(
-  summary: Record<
-    "yeouido_station" | "gangnam_station",
-    CommuteSummary | null
-  > | null,
+  summary: CommuteAccessSummary | null,
 ) {
   if (!summary) {
     return "접근성 미입력";
   }
 
   return [
-    formatCommuteLine("여의도", summary.yeouido_station),
-    formatCommuteLine("강남", summary.gangnam_station),
+    formatCommuteLine("여의도", summary.yeouido_station.transit, summary.yeouido_station.driving),
+    formatCommuteLine("강남", summary.gangnam_station.transit, summary.gangnam_station.driving),
   ].join(" / ");
 }
 
 function formatCommuteLine(
   label: string,
-  commute: CommuteSummary | null,
+  transit: CommuteSummary | null,
+  driving: CommuteSummary | null,
 ) {
-  if (!commute) {
+  if (!transit && !driving) {
     return `${label} -`;
   }
 
-  return `${label} ${commute.durationMinutes}분`;
+  return `${label} 대중 ${formatCommuteDuration(transit)} · 자차 ${formatCommuteDuration(
+    driving,
+  )}`;
+}
+
+function formatCommuteDuration(commute: CommuteSummary | null) {
+  return commute ? `${commute.durationMinutes}분` : "-";
 }
 
 function isMissingTableError(error: { code?: string } | null) {

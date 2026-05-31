@@ -1,6 +1,6 @@
 import type { ApartmentStatus } from "../../types/apartment";
 import {
-  buildCommuteSummaryByApartment,
+  buildCommuteAccessSummaryByApartment,
   type CommuteSummary,
   type CommuteTimeLike,
 } from "./commute-summary";
@@ -54,6 +54,8 @@ export type ApartmentComparisonRow = {
   basicInfoFetchedAt: string | null;
   commuteToYeouido: CommuteSummary | null;
   commuteToGangnam: CommuteSummary | null;
+  driveToYeouido: CommuteSummary | null;
+  driveToGangnam: CommuteSummary | null;
   areaSummaries: Array<{
     areaBucket: string;
     latestDealDate: string;
@@ -71,7 +73,7 @@ export function buildApartmentComparisonRows(
 ): ApartmentComparisonRow[] {
   const latestBasicInfoByApartmentId = getLatestBasicInfoByApartmentId(basicInfos);
   const commuteSummaryByApartmentId =
-    buildCommuteSummaryByApartment(commuteTimes);
+    buildCommuteAccessSummaryByApartment(commuteTimes);
 
   return apartments.map((apartment) => {
     const apartmentTransactions = transactions.filter(
@@ -107,8 +109,10 @@ export function buildApartmentComparisonRows(
       approvalDate: basicInfo?.approval_date ?? null,
       buildingAgeYears: getBuildingAgeYears(basicInfo?.approval_date ?? null),
       basicInfoFetchedAt: basicInfo?.fetched_at ?? null,
-      commuteToYeouido: commuteSummary?.yeouido_station ?? null,
-      commuteToGangnam: commuteSummary?.gangnam_station ?? null,
+      commuteToYeouido: commuteSummary?.yeouido_station.transit ?? null,
+      commuteToGangnam: commuteSummary?.gangnam_station.transit ?? null,
+      driveToYeouido: commuteSummary?.yeouido_station.driving ?? null,
+      driveToGangnam: commuteSummary?.gangnam_station.driving ?? null,
       areaSummaries: priceSummary.areaSummaries.map((summary) => ({
         areaBucket: summary.areaBucket,
         latestDealDate: summary.latestDealDate,

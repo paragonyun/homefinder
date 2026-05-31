@@ -28,6 +28,7 @@ const rows: ApartmentComparisonRow[] = [
     commuteToYeouido: {
       destinationKey: "yeouido_station",
       destinationName: "여의도역",
+      transportType: "transit",
       durationMinutes: 32,
       transferCount: 1,
       sourceName: "manual",
@@ -35,8 +36,16 @@ const rows: ApartmentComparisonRow[] = [
       queryDatetime: null,
       confidenceLevel: "manual",
       fetchedAt: "2026-05-29T00:00:00Z",
+      distanceMeters: null,
+      walkDistanceMeters: null,
+      fareKrw: null,
+      expiresAt: null,
+      routeSteps: [],
+      isExpired: false,
     },
     commuteToGangnam: null,
+    driveToYeouido: null,
+    driveToGangnam: null,
     areaSummaries: [],
   },
   {
@@ -59,6 +68,25 @@ const rows: ApartmentComparisonRow[] = [
     basicInfoFetchedAt: null,
     commuteToYeouido: null,
     commuteToGangnam: null,
+    driveToYeouido: null,
+    driveToGangnam: {
+      destinationKey: "gangnam_station",
+      destinationName: "강남역",
+      transportType: "driving",
+      durationMinutes: 41,
+      transferCount: null,
+      sourceName: "tmap-driving",
+      sourceRef: null,
+      queryDatetime: null,
+      confidenceLevel: "high",
+      fetchedAt: "2026-05-29T00:00:00Z",
+      distanceMeters: 15000,
+      walkDistanceMeters: null,
+      fareKrw: null,
+      expiresAt: null,
+      routeSteps: [],
+      isExpired: false,
+    },
     areaSummaries: [],
   },
 ];
@@ -79,7 +107,7 @@ describe("comparison view helpers", () => {
         status: "all",
         data: "missing-commute",
       }).map((row) => row.id),
-    ).toEqual(["b"]);
+    ).toEqual([]);
   });
 
   it("counts data completeness metrics", () => {
@@ -87,13 +115,13 @@ describe("comparison view helpers", () => {
       total: 2,
       withPrice: 1,
       withKapt: 1,
-      withCommute: 1,
+      withCommute: 2,
       needsSync: 1,
     });
   });
 
-  it("detects rows with either Yeouido or Gangnam commute data", () => {
+  it("detects rows with either transit or driving commute data", () => {
     expect(hasCommuteInfo(rows[0])).toBe(true);
-    expect(hasCommuteInfo(rows[1])).toBe(false);
+    expect(hasCommuteInfo(rows[1])).toBe(true);
   });
 });

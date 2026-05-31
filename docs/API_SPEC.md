@@ -85,9 +85,19 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 
 - `GET /api/apartments/:id/schools`
 - `GET /api/apartments/:id/commute` (planned)
-- `POST /api/apartments/:id/commute/refresh` (planned)
+- `POST /api/apartments/:id/commute/refresh`
 
-현재 구현은 별도 route 없이 Supabase `commute_times` 테이블을 클라이언트에서 읽고 씁니다. 운영자는 단지 관리 화면에서 여의도역/강남역 대중교통 소요시간과 환승 수를 수동 입력하고, 상세/비교 화면에서 확인합니다. 지도 API 자동계산이 붙으면 위 route가 원천 응답 저장과 refresh를 담당합니다.
+현재 구현은 Supabase `commute_times` 테이블을 클라이언트에서 읽고 씁니다. 운영자는 단지 관리 화면에서 수동 대중교통 시간을 입력할 수 있고, 단지 상세 화면의 `접근성 자동 조회`는 TMAP으로 여의도역/강남역 대중교통과 자동차 시간을 조회해 저장합니다.
+
+`POST /api/apartments/:id/commute/refresh`:
+
+- 인증: `Authorization: Bearer <Supabase access token>`
+- 권한: `app_metadata.role = admin`
+- 환경변수: `TMAP_API_KEY` 필수. 필요하면 `TMAP_TRANSIT_API_KEY`, `TMAP_DRIVING_API_KEY`로 분리 가능
+- 동작: 단지 좌표가 없으면 TMAP 지오코딩으로 주소를 좌표화하고, 여의도역/강남역까지 대중교통/자동차 경로를 조회합니다.
+- 기준 시각: 다음 평일 오전 7시 30분(Asia/Seoul)
+- 저장: `commute_times`에 `transit`, `driving` row를 upsert합니다. TMAP 상세 경로는 24시간 캐시 메타데이터로만 `source_ref`에 저장하고 `raw_api_responses`에는 장기 보존하지 않습니다.
+- 실패: `TMAP_API_KEY` 없음, 좌표/주소 없음, 권한 없음, TMAP API 오류를 명시적으로 반환합니다.
 
 ## Field Notes
 

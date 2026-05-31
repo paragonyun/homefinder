@@ -67,8 +67,10 @@
 - [x] 실제 K-apt API 응답으로 운영 환경 동기화 검증
 - [x] 여의도역/강남역 접근성 수동 입력 UI 작성
 - [x] 단지 상세/비교 화면 접근성 표시
-- [ ] Supabase에 `20260529000100_commute_times.sql` 적용
-- [ ] 지도/교통 API 기반 접근성 자동 계산 검토
+- [x] Supabase에 `20260529000100_commute_times.sql` 적용
+- [x] TMAP 기반 대중교통/자동차 접근성 자동 조회 route 작성
+- [x] 대중교통 상세 경로 timeline UI 작성
+- [ ] Vercel에 `TMAP_API_KEY` 등록
 
 ## 운영 적용 메모
 
@@ -81,8 +83,9 @@
 - [x] Supabase에 `20260519000200_apartment_transactions.sql` 적용 확인
 - [x] Supabase에 `20260520000100_apartment_aliases.sql` 적용 확인
 - [x] Supabase에 `20260520000200_apartment_basic_info.sql` 적용
-- [ ] Supabase에 `20260529000100_commute_times.sql` 적용 확인
+- [x] Supabase에 `20260529000100_commute_times.sql` 적용 확인
 - [x] Vercel에 `KAPT_API_KEY` 등록
+- [ ] Vercel에 `TMAP_API_KEY` 등록
 - [x] Supabase 운영자 계정 `app_metadata.role = admin` 설정 확인
 
 ## 금지/주의

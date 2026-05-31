@@ -102,19 +102,28 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 - 대체 데이터 소스: Naver Geocoding, 공공주소 API
 - 구현 난이도: 낮음-중간
 
-## 교통 API 후보
+## TMAP 접근성
 
-- 데이터명: 대중교통 소요시간
-- 제공기관: 서울시, ODsay, TMAP, Kakao/Naver 지도 API 후보
-- API 이름: 대중교통 경로/환승 경로 API 후보
-- 인증 방식: API별 키
-- 응답 형식: JSON 후보
+- 데이터명: 대중교통/자동차 경로 소요시간
+- 제공기관: TMAP Mobility / SK open API
+- API 이름: TMAP 대중교통 API, TMAP 자동차 경로안내, Full Text Geocoding
+- 인증 방식: `appKey`
+- 응답 형식: JSON
 - 주요 파라미터: 출발 좌표, 도착 좌표, 기준 시각
-- 호출 제한: 무료 호출량과 약관 확인 필요
-- 약관/주의사항: 시간대 기준을 저장하고 화면에 표시
+- 호출 제한: 대중교통 FREE 플랜은 10건/일 기준으로 운영합니다.
+- 약관/주의사항: TMAP API 결과는 24시간 캐시로만 표시하고 장기 원천 응답 저장은 하지 않습니다.
 - MVP 적용 여부: MVP 2
-- 대체 데이터 소스: 수동 메모, 직선거리/도보 추정
-- 구현 난이도: 높음
+- 대체 데이터 소스: 수동 입력/보정값
+- 구현 난이도: 중간
+
+구현 정책:
+
+- API 키는 기본적으로 `TMAP_API_KEY` 하나로 서버 route에서만 읽습니다.
+- 대중교통과 자동차 키를 분리해야 하면 `TMAP_TRANSIT_API_KEY`, `TMAP_DRIVING_API_KEY`가 `TMAP_API_KEY`보다 우선됩니다.
+- 기준 시각은 다음 평일 오전 7시 30분(Asia/Seoul)입니다.
+- 단지 좌표가 없으면 TMAP 지오코딩으로 주소를 좌표화하고 `apartments.lat/lng`에 저장합니다.
+- 여의도역/강남역 각각 대중교통(`transit`)과 자동차(`driving`) row를 `commute_times`에 upsert합니다.
+- 대중교통 상세 경로는 도보/버스/지하철/환승 단계만 정규화해 `source_ref`에 24시간 캐시 메타데이터로 저장합니다.
 
 ## KB부동산 처리
 

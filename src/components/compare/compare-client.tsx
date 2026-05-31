@@ -489,11 +489,17 @@ function ComparisonMatrix({
               />
               <MiniMetric
                 label="여의도"
-                value={formatCommuteDuration(row.commuteToYeouido)}
+                value={formatDestinationAccess(
+                  row.commuteToYeouido,
+                  row.driveToYeouido,
+                )}
               />
               <MiniMetric
                 label="강남"
-                value={formatCommuteDuration(row.commuteToGangnam)}
+                value={formatDestinationAccess(
+                  row.commuteToGangnam,
+                  row.driveToGangnam,
+                )}
               />
             </div>
             <div className="mt-4">
@@ -543,15 +549,45 @@ function CommuteSummaryView({
 }: Readonly<{
   row: ReturnType<typeof buildApartmentComparisonRows>[number];
 }>) {
-  if (!row.commuteToYeouido && !row.commuteToGangnam) {
+  if (!hasCommuteInfo(row)) {
     return <span className="text-slate-500">접근성 미입력</span>;
   }
 
   return (
-    <div className="grid gap-1">
-      <p>여의도 {formatCommuteDuration(row.commuteToYeouido)}</p>
-      <p>강남 {formatCommuteDuration(row.commuteToGangnam)}</p>
-      <p className="text-xs text-slate-500">대중교통 기준</p>
+    <div className="grid gap-2">
+      <DestinationAccessLine
+        label="여의도"
+        transit={row.commuteToYeouido}
+        driving={row.driveToYeouido}
+      />
+      <DestinationAccessLine
+        label="강남"
+        transit={row.commuteToGangnam}
+        driving={row.driveToGangnam}
+      />
+      <p className="text-xs text-slate-500">대중교통 / 자차</p>
+    </div>
+  );
+}
+
+function DestinationAccessLine({
+  driving,
+  label,
+  transit,
+}: Readonly<{
+  driving: ReturnType<typeof buildApartmentComparisonRows>[number]["driveToYeouido"];
+  label: string;
+  transit: ReturnType<typeof buildApartmentComparisonRows>[number]["commuteToYeouido"];
+}>) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
+      <p className="font-semibold text-slate-950">{label}</p>
+      <p className="mt-1 text-xs text-slate-600">
+        대중교통 {formatCommuteDuration(transit)}
+      </p>
+      <p className="mt-1 text-xs text-slate-600">
+        자차 {formatDrivingDuration(driving)}
+      </p>
     </div>
   );
 }
@@ -699,6 +735,38 @@ function formatCommuteDuration(
     value.transferCount !== null ? ` · 환승 ${value.transferCount}회` : "";
 
   return `${value.durationMinutes.toLocaleString("ko-KR")}분${transfers}`;
+}
+
+function formatDrivingDuration(
+  value: ReturnType<typeof buildApartmentComparisonRows>[number]["driveToYeouido"],
+) {
+  if (!value) {
+    return "-";
+  }
+
+  const distance =
+    value.distanceMeters !== null ? ` · ${formatMeters(value.distanceMeters)}` : "";
+
+  return `${value.durationMinutes.toLocaleString("ko-KR")}분${distance}`;
+}
+
+function formatDestinationAccess(
+  transit: ReturnType<typeof buildApartmentComparisonRows>[number]["commuteToYeouido"],
+  driving: ReturnType<typeof buildApartmentComparisonRows>[number]["driveToYeouido"],
+) {
+  if (!transit && !driving) {
+    return "-";
+  }
+
+  return `${formatCommuteDuration(transit)} / ${formatDrivingDuration(driving)}`;
+}
+
+function formatMeters(value: number) {
+  return value >= 1000
+    ? `${(value / 1000).toLocaleString("ko-KR", {
+        maximumFractionDigits: 1,
+      })}km`
+    : `${value.toLocaleString("ko-KR")}m`;
 }
 
 function isMissingTableError(error: { code?: string }) {

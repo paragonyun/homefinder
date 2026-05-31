@@ -34,6 +34,9 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 MOLIT_API_KEY=
 KAPT_API_KEY=
+TMAP_API_KEY=
+TMAP_TRANSIT_API_KEY=
+TMAP_DRIVING_API_KEY=
 NEIS_API_KEY=
 KAKAO_REST_API_KEY=
 TRANSIT_API_KEY=
@@ -83,6 +86,12 @@ K-apt 기본정보 동기화에는 `KAPT_API_KEY`가 필요합니다. 공공데�
 환경변수에 추가하고 다시 배포합니다. 단지 수정 화면에서 K-apt 코드를 입력한 뒤
 단지 상세 화면에서 기본정보를 불러올 수 있습니다.
 
+강남역/여의도역 접근성 자동 조회에는 `TMAP_API_KEY`가 필요합니다. TMAP
+대중교통/자동차 API를 사용할 수 있는 앱키를 Vercel 환경변수에 추가하고 다시
+배포합니다. 기본은 `TMAP_API_KEY` 하나를 쓰며, 키를 분리해야 하면
+`TMAP_TRANSIT_API_KEY`, `TMAP_DRIVING_API_KEY`를 추가로 설정합니다. TMAP 조회
+결과는 약관을 고려해 24시간 캐시로만 표시하고, 만료 후에는 다시 조회합니다.
+
 ## 운영자 계정 설정
 
 개인용 운영은 Supabase Dashboard에서 미리 만든 계정만 로그인하도록 둡니다.
@@ -129,5 +138,6 @@ where email = 'you@example.com';
 ## 현재 상태
 
 현재 앱은 Supabase Auth, 운영자 제한 CRUD, 국토부 실거래가 동기화, K-apt
-기본정보 동기화 기반이 연결되어 있습니다. 단지 비교 화면은 실거래가와 K-apt
-세대수/주차 정보를 함께 보여주며, 지도/교통 연동은 아직 포함하지 않습니다.
+기본정보 동기화, TMAP 기반 접근성 조회 기반이 연결되어 있습니다. 단지 비교
+화면은 실거래가, K-apt 세대수/주차, 여의도역/강남역 대중교통/자차 접근성을
+함께 보여줍니다.

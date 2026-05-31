@@ -62,7 +62,12 @@ export function needsSync(row: ApartmentComparisonRow) {
 }
 
 export function hasCommuteInfo(row: ApartmentComparisonRow) {
-  return Boolean(row.commuteToYeouido || row.commuteToGangnam);
+  return Boolean(
+    row.commuteToYeouido ||
+      row.commuteToGangnam ||
+      row.driveToYeouido ||
+      row.driveToGangnam,
+  );
 }
 
 function matchesDataFilter(

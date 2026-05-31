@@ -8,9 +8,11 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { apartments as mockApartments } from "@/lib/mock-data";
 import {
-  buildCommuteSummaryByApartment,
+  buildCommuteAccessSummaryByApartment,
+  type CommuteAccessSummary,
   type CommuteSummary,
 } from "@/lib/services/commute-summary";
+import type { CommuteDestinationKey } from "@/types/commute";
 import {
   buildLinearTicks,
   getVisibleMonthLabels,
@@ -54,6 +56,18 @@ type BasicInfoSyncResult = {
   error?: string;
   kaptName?: string | null;
   fetchedAt?: string;
+};
+
+type CommuteRefreshResult = {
+  error?: string;
+  savedCount?: number;
+  errors?: Array<{
+    destinationKey: string;
+    transportType: string;
+    error: string;
+  }>;
+  searchDttm?: string;
+  expiresAt?: string;
 };
 
 type KaptCodeCandidate = {
@@ -103,6 +117,7 @@ export function ApartmentDetailClient({
   >([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBasicInfoSyncing, setIsBasicInfoSyncing] = useState(false);
+  const [isCommuteSyncing, setIsCommuteSyncing] = useState(false);
   const [isComprehensiveSyncing, setIsComprehensiveSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
@@ -289,6 +304,28 @@ export function ApartmentDetailClient({
     }
   }
 
+  async function handleCommuteRefresh() {
+    if (!supabase || !session || !apartment || !isAdmin) {
+      setMessage("접근성 자동 조회는 운영자 계정만 실행할 수 있습니다.");
+      return;
+    }
+
+    setIsCommuteSyncing(true);
+    setMessage(null);
+
+    try {
+      const accessToken = await getAccessToken();
+      const result = await refreshCommute(accessToken);
+
+      await loadApartment();
+      setMessage(formatCommuteRefreshMessage(result));
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsCommuteSyncing(false);
+    }
+  }
+
   async function handleComprehensiveSync() {
     if (!supabase || !session || !apartment || !isAdmin) {
       setMessage("종합 정보 조회는 운영자 계정만 실행할 수 있습니다.");
@@ -443,6 +480,19 @@ export function ApartmentDetailClient({
     return result;
   }
 
+  async function refreshCommute(accessToken: string) {
+    const { response, result } = await postApartmentJson<CommuteRefreshResult>(
+      `/api/apartments/${apartmentId}/commute/refresh`,
+      accessToken,
+    );
+
+    if (!response.ok) {
+      throw new Error(result.error ?? "접근성 자동 조회에 실패했습니다.");
+    }
+
+    return result;
+  }
+
   const title = mockApartment?.name ?? apartment?.display_name ?? apartment?.name;
   const address = mockApartment?.address ?? apartment?.address ?? "주소 미입력";
   const memo = mockApartment?.note ?? apartment?.memo ?? "메모 없음";
@@ -464,8 +514,10 @@ export function ApartmentDetailClient({
     [latestTransactionMonth, transactions],
   );
   const latestSummary = priceSummary.areaSummaries[0] ?? null;
-  const commuteSummary = useMemo(
-    () => buildCommuteSummaryByApartment(commuteTimes).get(apartmentId) ?? null,
+  const commuteAccessSummary = useMemo(
+    () =>
+      buildCommuteAccessSummaryByApartment(commuteTimes).get(apartmentId) ??
+      null,
     [apartmentId, commuteTimes],
   );
   const totalTransactionCount = priceSummary.areaSummaries.reduce(
@@ -473,7 +525,7 @@ export function ApartmentDetailClient({
     0,
   );
   const hasAnySyncInProgress =
-    isComprehensiveSyncing || isSyncing || isBasicInfoSyncing;
+    isComprehensiveSyncing || isSyncing || isBasicInfoSyncing || isCommuteSyncing;
 
   return (
     <div className="grid gap-5">
@@ -537,13 +589,17 @@ export function ApartmentDetailClient({
             />
             <HeroMetric
               label="여의도역"
-              value={formatCommuteMetric(commuteSummary?.yeouido_station ?? null)}
-              detail="대중교통"
+              value={formatAccessMetric(
+                commuteAccessSummary?.yeouido_station ?? null,
+              )}
+              detail="대중교통 / 자차"
             />
             <HeroMetric
               label="강남역"
-              value={formatCommuteMetric(commuteSummary?.gangnam_station ?? null)}
-              detail="대중교통"
+              value={formatAccessMetric(
+                commuteAccessSummary?.gangnam_station ?? null,
+              )}
+              detail="대중교통 / 자차"
             />
             <HeroMetric
               label="세대수"
@@ -570,23 +626,35 @@ export function ApartmentDetailClient({
       </section>
 
       <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div>
-          <h2 className="text-lg font-semibold tracking-normal text-slate-950">
-            강남역/여의도역 접근성
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            단지 관리 화면에서 저장한 대중교통 기준 소요시간과 환승 수를
-            표시합니다.
-          </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+              강남역/여의도역 접근성
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              TMAP 기준 평일 오전 7시 30분 출발 대중교통 경로와 자동차
+              소요시간을 24시간 캐시로 표시합니다.
+            </p>
+          </div>
+          {!mockApartment && session ? (
+            <button
+              type="button"
+              onClick={() => void handleCommuteRefresh()}
+              disabled={hasAnySyncInProgress || !isAdmin}
+              className="h-10 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-slate-300"
+            >
+              {isCommuteSyncing ? "접근성 조회 중" : "접근성 자동 조회"}
+            </button>
+          ) : null}
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <CommuteAccessCard
             title="여의도역"
-            commute={commuteSummary?.yeouido_station ?? null}
+            access={commuteAccessSummary?.yeouido_station ?? null}
           />
           <CommuteAccessCard
             title="강남역"
-            commute={commuteSummary?.gangnam_station ?? null}
+            access={commuteAccessSummary?.gangnam_station ?? null}
           />
         </div>
       </section>
@@ -950,41 +1018,209 @@ function HeroMetric({
 }
 
 function CommuteAccessCard({
-  commute,
+  access,
   title,
-}: Readonly<{ commute: CommuteSummary | null; title: string }>) {
+}: Readonly<{
+  access: CommuteAccessSummary[CommuteDestinationKey] | null;
+  title: string;
+}>) {
+  const transit = access?.transit ?? null;
+  const driving = access?.driving ?? null;
+
   return (
-    <article className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+    <article className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-950">{title}</p>
-          <p className="mt-1 text-xs text-slate-500">대중교통 기준</p>
+          <p className="mt-1 text-xs text-slate-500">TMAP 24시간 캐시</p>
         </div>
         <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
-          {commute?.confidenceLevel === "manual" ? "수동" : "저장됨"}
+          {transit?.isExpired || driving?.isExpired ? "갱신 필요" : "저장됨"}
         </span>
       </div>
-      <p className="mt-4 text-2xl font-semibold text-slate-950">
-        {formatCommuteMetric(commute)}
-      </p>
-      <p className="mt-2 text-sm text-slate-600">
-        {commute
-          ? commute.transferCount !== null
-            ? `환승 ${commute.transferCount}회`
-            : "환승 정보 없음"
-          : "단지 관리 화면에서 소요시간을 입력하세요."}
-      </p>
-      {commute?.fetchedAt ? (
-        <p className="mt-3 text-xs text-slate-500">
-          갱신 {formatDate(commute.fetchedAt)}
-        </p>
-      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <CommuteModeSummary label="대중교통" commute={transit} />
+        <CommuteModeSummary label="자동차" commute={driving} />
+      </div>
+      <TransitRouteTimeline commute={transit} />
     </article>
   );
 }
 
 function formatCommuteMetric(commute: CommuteSummary | null) {
   return commute ? `${commute.durationMinutes.toLocaleString("ko-KR")}분` : "-";
+}
+
+function CommuteModeSummary({
+  commute,
+  label,
+}: Readonly<{ commute: CommuteSummary | null; label: string }>) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-slate-500">{label}</p>
+        {commute?.isExpired ? (
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+            만료
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-2 text-xl font-semibold text-slate-950">
+        {formatCommuteMetric(commute)}
+      </p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">
+        {commute ? formatCommuteSubtext(commute) : "조회 전"}
+      </p>
+      {commute?.fetchedAt ? (
+        <p className="mt-2 text-[11px] text-slate-400">
+          조회 {formatDate(commute.fetchedAt)}
+          {commute.expiresAt ? ` · 만료 ${formatDate(commute.expiresAt)}` : ""}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function TransitRouteTimeline({
+  commute,
+}: Readonly<{ commute: CommuteSummary | null }>) {
+  if (!commute) {
+    return (
+      <p className="rounded-md border border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-500">
+        접근성 자동 조회를 실행하면 도보, 버스, 지하철, 환승 구간이 여기에 표시됩니다.
+      </p>
+    );
+  }
+
+  if (commute.routeSteps.length === 0) {
+    return (
+      <p className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm text-slate-500">
+        상세 경로가 없는 수동 입력값입니다.
+      </p>
+    );
+  }
+
+  return (
+    <ol className="grid gap-2">
+      {commute.routeSteps.map((step, index) => (
+        <li
+          key={`${step.mode}-${index}-${step.title}`}
+          className="flex gap-3 rounded-md border border-slate-200 bg-white p-3"
+        >
+          <span
+            className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getRouteStepTone(
+              step.mode,
+            )}`}
+          >
+            {getRouteStepIcon(step.mode)}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-950">
+              {step.routeName ? `${step.title} · ${step.routeName}` : step.title}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-slate-600">
+              {step.detail ?? "-"}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              {formatRouteStepMeta(step)}
+            </p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function formatAccessMetric(
+  access: CommuteAccessSummary[CommuteDestinationKey] | null,
+) {
+  if (!access?.transit && !access?.driving) {
+    return "-";
+  }
+
+  return `${formatCommuteMetric(access.transit)} / ${formatCommuteMetric(
+    access.driving,
+  )}`;
+}
+
+function formatCommuteSubtext(commute: CommuteSummary) {
+  const parts = [];
+
+  if (commute.transportType === "transit" && commute.transferCount !== null) {
+    parts.push(`환승 ${commute.transferCount}회`);
+  }
+
+  if (commute.walkDistanceMeters !== null) {
+    parts.push(`도보 ${formatMeters(commute.walkDistanceMeters)}`);
+  }
+
+  if (commute.distanceMeters !== null) {
+    parts.push(`거리 ${formatMeters(commute.distanceMeters)}`);
+  }
+
+  if (commute.fareKrw !== null) {
+    parts.push(`요금 ${commute.fareKrw.toLocaleString("ko-KR")}원`);
+  }
+
+  return parts.join(" · ") || "상세 정보 없음";
+}
+
+function formatRouteStepMeta(step: CommuteSummary["routeSteps"][number]) {
+  return [
+    step.durationMinutes !== null ? `${step.durationMinutes}분` : null,
+    step.distanceMeters !== null ? formatMeters(step.distanceMeters) : null,
+    step.stopCount !== null ? `${step.stopCount}개 정류장` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function formatMeters(value: number) {
+  return value >= 1000
+    ? `${(value / 1000).toLocaleString("ko-KR", {
+        maximumFractionDigits: 1,
+      })}km`
+    : `${value.toLocaleString("ko-KR")}m`;
+}
+
+function getRouteStepTone(mode: CommuteSummary["routeSteps"][number]["mode"]) {
+  if (mode === "bus") {
+    return "bg-blue-50 text-blue-700";
+  }
+
+  if (mode === "subway") {
+    return "bg-emerald-50 text-emerald-700";
+  }
+
+  if (mode === "transfer") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  if (mode === "driving") {
+    return "bg-slate-100 text-slate-700";
+  }
+
+  return "bg-slate-50 text-slate-600";
+}
+
+function getRouteStepIcon(mode: CommuteSummary["routeSteps"][number]["mode"]) {
+  if (mode === "bus") {
+    return "B";
+  }
+
+  if (mode === "subway") {
+    return "M";
+  }
+
+  if (mode === "transfer") {
+    return "↔";
+  }
+
+  if (mode === "driving") {
+    return "C";
+  }
+
+  return "W";
 }
 
 function SyncStatusPanel({
@@ -1449,6 +1685,19 @@ function formatBasicInfoSyncMessage(result: BasicInfoSyncResult) {
   return result.kaptName
     ? `${result.kaptName} K-apt 기본정보를 반영했습니다.`
     : "K-apt 기본정보를 반영했습니다.";
+}
+
+function formatCommuteRefreshMessage(result: CommuteRefreshResult) {
+  const savedCount = result.savedCount ?? 0;
+  const failedCount = result.errors?.length ?? 0;
+  const baseMessage = `접근성 ${savedCount}건을 TMAP 기준으로 조회했습니다.`;
+  const expireMessage = result.expiresAt
+    ? `자동 조회값은 ${formatDate(result.expiresAt)}까지 표시됩니다.`
+    : "자동 조회값은 24시간 동안 표시됩니다.";
+
+  return failedCount > 0
+    ? `${baseMessage} 일부 실패 ${failedCount}건이 있습니다. ${expireMessage}`
+    : `${baseMessage} ${expireMessage}`;
 }
 
 function getErrorMessage(error: unknown) {

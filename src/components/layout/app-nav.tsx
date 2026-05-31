@@ -17,7 +17,7 @@ export function AppNav() {
   return (
     <nav
       aria-label="주요 화면"
-      className="flex min-w-0 gap-1 overflow-x-auto rounded-full border border-slate-200 bg-slate-100 p-1 text-sm font-medium text-slate-600"
+      className="flex max-w-full min-w-0 flex-wrap gap-1 rounded-2xl border border-slate-200 bg-slate-100 p-1 text-sm font-medium text-slate-600 sm:flex-nowrap sm:overflow-x-auto sm:rounded-full"
     >
       {navigation.map((item) => {
         const isActive =

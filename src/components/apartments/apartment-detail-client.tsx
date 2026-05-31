@@ -538,7 +538,7 @@ export function ApartmentDetailClient({
       ) : null}
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 bg-gradient-to-b from-white to-slate-50 px-5 py-5">
+        <div className="border-b border-slate-200 bg-gradient-to-b from-white to-slate-50 px-4 py-5 sm:px-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -546,7 +546,7 @@ export function ApartmentDetailClient({
                 <DataBadge label={`법정동 ${apartment?.lawd_cd ?? "미입력"}`} />
                 <DataBadge label={`K-apt ${apartment?.kapt_code ?? "미입력"}`} />
               </div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-normal text-slate-950">
+              <h1 className="mt-3 break-keep text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
                 {title ?? "단지 정보 없음"}
               </h1>
               <p className="mt-2 text-sm text-slate-600">{address}</p>
@@ -561,7 +561,7 @@ export function ApartmentDetailClient({
                 disabled={
                   hasAnySyncInProgress || !apartment?.lawd_cd || !isAdmin
                 }
-                className="h-11 rounded-md bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:bg-slate-300"
+                className="h-11 w-full rounded-md bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:bg-slate-300 sm:w-auto"
               >
                 {isComprehensiveSyncing
                   ? "종합 조회 중"
@@ -625,7 +625,7 @@ export function ApartmentDetailClient({
         </div>
       </section>
 
-      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="grid min-w-0 gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-normal text-slate-950">
@@ -641,7 +641,7 @@ export function ApartmentDetailClient({
               type="button"
               onClick={() => void handleCommuteRefresh()}
               disabled={hasAnySyncInProgress || !isAdmin}
-              className="h-10 rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-slate-300"
+            className="h-10 w-full rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-slate-300 sm:w-auto"
             >
               {isCommuteSyncing ? "접근성 조회 중" : "접근성 자동 조회"}
             </button>
@@ -670,7 +670,7 @@ export function ApartmentDetailClient({
         />
       ) : null}
 
-      <section className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="grid min-w-0 gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-normal text-slate-950">
@@ -758,7 +758,7 @@ export function ApartmentDetailClient({
         )}
       </section>
 
-      <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="grid min-w-0 gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-normal text-slate-950">
@@ -807,7 +807,7 @@ export function ApartmentDetailClient({
               {priceSummary.areaSummaries.map((summary) => (
                 <article
                   key={summary.areaBucket}
-                  className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+                  className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -835,7 +835,7 @@ export function ApartmentDetailClient({
                   <p className="mt-1 text-xs text-slate-500">
                     최근 거래 {formatDate(summary.latestDealDate)}
                   </p>
-                  <dl className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                  <dl className="mt-4 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
                     <div>
                       <dt className="text-slate-500">평균</dt>
                       <dd className="mt-1 font-semibold text-slate-800">
@@ -860,7 +860,7 @@ export function ApartmentDetailClient({
             </div>
 
             {trendLines.length > 0 ? (
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-sm font-semibold text-slate-950">
@@ -956,7 +956,7 @@ export function ApartmentDetailClient({
         )}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-normal text-slate-950">
@@ -1007,12 +1007,12 @@ function HeroMetric({
   value,
 }: Readonly<{ detail: string; label: string; value: string }>) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
       <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-2 truncate text-lg font-semibold text-slate-950">
+      <p className="mt-2 break-words text-lg font-semibold text-slate-950">
         {value}
       </p>
-      <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>
+      <p className="mt-1 break-words text-xs text-slate-500">{detail}</p>
     </div>
   );
 }
@@ -1028,7 +1028,7 @@ function CommuteAccessCard({
   const driving = access?.driving ?? null;
 
   return (
-    <article className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+    <article className="grid min-w-0 gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-950">{title}</p>
@@ -1056,7 +1056,7 @@ function CommuteModeSummary({
   label,
 }: Readonly<{ commute: CommuteSummary | null; label: string }>) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-3">
+    <div className="min-w-0 rounded-md border border-slate-200 bg-white p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold text-slate-500">{label}</p>
         {commute?.isExpired ? (
@@ -1101,11 +1101,11 @@ function TransitRouteTimeline({
   }
 
   return (
-    <ol className="grid gap-2">
+    <ol className="grid min-w-0 gap-2">
       {commute.routeSteps.map((step, index) => (
         <li
           key={`${step.mode}-${index}-${step.title}`}
-          className="flex gap-3 rounded-md border border-slate-200 bg-white p-3"
+          className="flex min-w-0 gap-3 rounded-md border border-slate-200 bg-white p-3"
         >
           <span
             className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getRouteStepTone(
@@ -1613,10 +1613,12 @@ function ChartStat({
   value,
 }: Readonly<{ detail: string; label: string; value: string }>) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+    <div className="min-w-0 rounded-md border border-slate-200 bg-white px-3 py-2">
       <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-slate-950">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{detail}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-slate-950">
+        {value}
+      </p>
+      <p className="mt-1 break-words text-xs text-slate-500">{detail}</p>
     </div>
   );
 }

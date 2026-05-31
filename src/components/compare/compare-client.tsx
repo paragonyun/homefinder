@@ -229,9 +229,9 @@ export function CompareClient() {
 
       {session ? (
         <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-5">
+          <div className="border-b border-slate-200 p-4 sm:p-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
                   Compare
                 </p>
@@ -243,7 +243,7 @@ export function CompareClient() {
                   같은 기준으로 비교합니다.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
+              <div className="grid w-full min-w-0 grid-cols-1 gap-2 text-sm min-[380px]:grid-cols-2 md:w-auto md:grid-cols-5">
                 <Metric label="등록 단지" value={`${metrics.total}개`} />
                 <Metric label="가격 데이터" value={`${metrics.withPrice}개`} />
                 <Metric label="K-apt 정보" value={`${metrics.withKapt}개`} />
@@ -252,7 +252,7 @@ export function CompareClient() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_200px]">
+            <div className="mt-5 grid min-w-0 gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_200px]">
               <label className="grid gap-1 text-xs font-semibold text-slate-500">
                 검색
                 <input
@@ -309,7 +309,7 @@ export function CompareClient() {
             </p>
           ) : rows.length > 0 ? (
             <div>
-              <div className="border-b border-slate-200 px-5 py-3 text-sm text-slate-600">
+              <div className="border-b border-slate-200 px-4 py-3 text-sm text-slate-600 sm:px-5">
                 {filteredRows.length}개 단지가 표시됩니다.
               </div>
               {filteredRows.length > 0 ? (
@@ -438,14 +438,14 @@ function ComparisonMatrix({
         </tbody>
       </table>
       </div>
-      <div className="grid gap-3 p-4 lg:hidden">
+      <div className="grid min-w-0 gap-3 p-3 sm:p-4 lg:hidden">
         {rows.map((row) => (
           <article
             key={row.id}
-            className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+            className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <Link
                   href={`/apartments/${row.id}`}
                   className="font-semibold text-slate-950"
@@ -458,7 +458,7 @@ function ComparisonMatrix({
               </div>
               <StatusPill status={row.status} />
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+            <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 text-sm min-[380px]:grid-cols-2">
               <MiniMetric
                 label="최근가"
                 value={
@@ -580,7 +580,7 @@ function DestinationAccessLine({
   transit: ReturnType<typeof buildApartmentComparisonRows>[number]["commuteToYeouido"];
 }>) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
+      <div className="min-w-0 rounded-md border border-slate-200 bg-white px-2.5 py-2">
       <p className="font-semibold text-slate-950">{label}</p>
       <p className="mt-1 text-xs text-slate-600">
         대중교통 {formatCommuteDuration(transit)}
@@ -645,18 +645,18 @@ function MiniMetric({
   value,
 }: Readonly<{ label: string; value: string }>) {
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 font-semibold text-slate-950">{value}</p>
+      <p className="mt-1 break-words font-semibold text-slate-950">{value}</p>
     </div>
   );
 }
 
 function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 font-semibold text-slate-950">{value}</p>
+      <p className="mt-1 break-words font-semibold text-slate-950">{value}</p>
     </div>
   );
 }

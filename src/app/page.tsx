@@ -75,7 +75,7 @@ export default function Home() {
               단지 추가 placeholder
             </Link>
           </div>
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[960px] text-left">
               <thead className="bg-slate-50 text-sm text-slate-600">
                 <tr>
@@ -95,8 +95,47 @@ export default function Home() {
               </tbody>
             </table>
           </div>
+          <div className="grid gap-3 p-4 md:hidden">
+            {apartments.map((apartment) => (
+              <article
+                key={apartment.id}
+                className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <Link
+                  href={`/apartments/${apartment.id}`}
+                  className="break-keep font-semibold text-slate-950"
+                >
+                  {apartment.name}
+                </Link>
+                <p className="mt-1 break-words text-xs leading-5 text-slate-500">
+                  {apartment.address}
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-2 text-sm min-[380px]:grid-cols-2">
+                  <DashboardMiniMetric label="동네" value={apartment.neighborhood} />
+                  <DashboardMiniMetric label="최근가" value={apartment.latestPrice} />
+                  <DashboardMiniMetric label="평형대" value={apartment.areaSummary} />
+                  <DashboardMiniMetric label="상태" value={apartment.sourceState} />
+                </div>
+                <p className="mt-3 break-words text-sm leading-6 text-slate-700">
+                  {apartment.note}
+                </p>
+              </article>
+            ))}
+          </div>
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function DashboardMiniMetric({
+  label,
+  value,
+}: Readonly<{ label: string; value: string }>) {
+  return (
+    <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 break-words font-semibold text-slate-950">{value}</p>
+    </div>
   );
 }

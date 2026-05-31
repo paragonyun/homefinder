@@ -335,7 +335,7 @@ export function DashboardClient() {
           후보 현황을 볼 수 있습니다.
         </section>
       ) : (
-        <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="grid min-w-0 items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_340px]">
           <NeighborhoodPortfolioGrid neighborhoods={model.neighborhoods} />
           <PriorityApartmentList model={model} />
         </section>
@@ -390,7 +390,7 @@ function NeighborhoodPortfolioGrid({
   neighborhoods,
 }: Readonly<{ neighborhoods: DashboardNeighborhoodSummary[] }>) {
   return (
-    <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+    <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2">
       {neighborhoods.map((neighborhood) => (
         <NeighborhoodPortfolioCard
           key={neighborhood.id}
@@ -411,7 +411,7 @@ function NeighborhoodPortfolioCard({
   return (
     <Link
       href={href}
-      className="grid min-w-0 gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:p-5"
+      className="grid min-w-0 content-start gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:p-5"
     >
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">

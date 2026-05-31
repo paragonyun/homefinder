@@ -101,3 +101,9 @@
 
 - [x] Supabase SQL Editor에 `supabase/migrations/20260521000100_kapt_code_directory.sql` 적용
 - [x] `kapt_code_directory` 서울 단지 디렉터리 seed 적용
+
+## 다음 개선 후보
+
+- [ ] 건축물대장 기반 `apartment_building_info` 파이프라인 구현
+  - 표시 후보: 용적률, 건폐율, 대지면적, 건축면적, 연면적, 최고층/최저층
+  - K-apt 기본정보만으로는 용적률·건폐율이 안정적으로 나오지 않으므로 별도 공식 데이터 소스 확인 필요

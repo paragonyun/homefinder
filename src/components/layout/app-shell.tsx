@@ -5,7 +5,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
   return (
     <div className="min-h-screen min-w-0 overflow-x-hidden bg-slate-50 text-slate-950">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl min-w-0 flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:justify-between md:px-6">
+        <div className="mx-auto flex max-w-[1480px] min-w-0 flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:justify-between md:px-6">
           <Link href="/" className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">
               HomeScope
@@ -19,7 +19,7 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-7xl min-w-0 px-3 py-4 md:px-6 md:py-5">
+      <main className="mx-auto w-full max-w-[1480px] min-w-0 px-3 py-4 md:px-6 md:py-5">
         {children}
       </main>
     </div>

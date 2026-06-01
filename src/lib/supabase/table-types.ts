@@ -130,6 +130,50 @@ export type CommuteTimeRow = {
   updated_at: string;
 };
 
+export type SchoolRow = {
+  id: string;
+  user_id: string;
+  source_name: string;
+  source_ref: string | null;
+  school_code: string;
+  office_code: string | null;
+  office_name: string | null;
+  school_name: string;
+  school_type: "elementary" | "middle" | "high" | "unknown";
+  school_kind_name: string | null;
+  region_name: string | null;
+  district_office_name: string | null;
+  address: string | null;
+  road_address: string | null;
+  homepage_url: string | null;
+  phone: string | null;
+  coeducation_type: string | null;
+  founded_date: string | null;
+  lat: number | null;
+  lng: number | null;
+  confidence_level: "high" | "medium" | "low" | "manual" | "unknown";
+  fetched_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ApartmentSchoolAccessRow = {
+  id: string;
+  user_id: string;
+  apartment_id: string;
+  school_id: string;
+  school_type: "elementary" | "middle" | "high" | "unknown";
+  distance_meters: number | null;
+  walk_minutes: number | null;
+  is_nearest_by_type: boolean;
+  source_name: string;
+  source_ref: string | null;
+  confidence_level: "high" | "medium" | "low" | "manual" | "unknown";
+  fetched_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ApartmentAliasRow = {
   id: string;
   user_id: string;

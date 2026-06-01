@@ -74,6 +74,15 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 - 대체 데이터 소스: K-apt 일부 항목, 수동 보정
 - 구현 난이도: 높음
 
+구현 업데이트:
+
+- 건축물대장 조회는 `POST /api/apartments/:id/building-info/sync`에서 처리합니다.
+- API는 `MOLIT_BUILDING_API_KEY`를 우선 사용하고, 없으면 기존 `MOLIT_API_KEY`를 사용합니다.
+- 조회 대상 API는 `BldRgstHubService/getBrRecapTitleInfo`를 먼저 시도하고, 유효한 결과가 없으면 `getBrTitleInfo`를 시도합니다.
+- 저장된 K-apt 기본정보 법정주소, K-apt 디렉터리 법정동코드, 실거래가 원천 지번주소를 조합해 `sigunguCd`, `bjdongCd`, `platGbCd`, `bun`, `ji`를 만듭니다.
+- 도로명주소만 있고 지번주소를 찾지 못하면 잘못된 건축물대장 조회를 막기 위해 API를 호출하지 않고 실패 메시지를 반환합니다.
+- 원천 응답은 `raw_api_responses`에 저장하고, 정규화된 용적률/건폐율/면적은 `apartment_building_info`에 저장합니다.
+
 ## NEIS 학교기본정보
 
 - 데이터명: 학교 기본정보
@@ -87,6 +96,15 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 - MVP 적용 여부: MVP 2
 - 대체 데이터 소스: 학교알리미 공시정보 후속 검토
 - 구현 난이도: 중간
+
+구현 정책:
+
+- 서버 route는 `POST /api/apartments/:id/schools/sync`입니다.
+- API 키는 `NEIS_API_KEY`를 사용합니다.
+- 단지 주소에서 시도명과 구군명을 추출하고, NEIS `schoolInfo`를 초등학교/중학교/고등학교별로 조회한 뒤 같은 구의 학교만 저장합니다.
+- `schools`에는 학교 기본정보와 주소를 저장하고, `apartment_school_access`에는 단지-학교 연결을 저장합니다.
+- 단지와 학교 좌표가 모두 있는 경우에만 직선거리와 도보 추정 시간을 계산합니다. 좌표가 없으면 화면에 `거리 계산 전`으로 표시합니다.
+- 실제 초등 통학구/중학군 배정은 교육청 기준과 다를 수 있으므로 앱에서는 “가까운 학교 후보”로만 표시합니다.
 
 ## Kakao Local API
 

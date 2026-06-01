@@ -64,6 +64,16 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 - 저장: 세대수, 동수, 사용승인일, 난방방식, 관리방식, 분양형태, 주차대수, 승강기대수, 건축물대장상 연면적, 원천 단지명/주소를 저장합니다.
 - 실패: `KAPT_API_KEY` 없음, K-apt 코드 없음, 권한 없음, 원천 데이터 없음, 공공데이터포털 에러 응답을 명시적으로 반환합니다.
 
+현재 구현된 건축물대장 정보 route:
+
+- `POST /api/apartments/:id/building-info/sync`
+- 인증: `Authorization: Bearer <Supabase access token>`
+- 권한: `app_metadata.role = admin`
+- 요청 body: 기본값은 `{}`
+- 동작: 저장된 `lawd_cd`, 최신 K-apt 기본정보 주소, K-apt 디렉터리 `bjd_code`, 최신 실거래가 원천 지번 주소를 조합해 건축물대장 조회 파라미터를 만들고, 건축HUB 건축물대장 총괄표제부/표제부 API를 조회합니다. 원천 응답은 `raw_api_responses`에 저장하고, 화면용 용적률/건폐율/면적 정보는 `apartment_building_info`에 upsert합니다.
+- API 키: `MOLIT_BUILDING_API_KEY`가 있으면 우선 사용하고, 없으면 기존 `MOLIT_API_KEY`를 사용합니다.
+- 실패: 10자리 법정동코드 또는 K-apt 디렉터리 `bjd_code`가 없거나, 지번 주소를 찾지 못하거나, 건축물대장 API 권한/응답 오류가 있으면 명시 메시지를 반환합니다.
+
 현재 구현된 K-apt 코드 탐색 route:
 
 - `POST /api/apartments/:id/kapt-code/resolve`
@@ -84,6 +94,7 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 ## Schools / Commute
 
 - `GET /api/apartments/:id/schools`
+- `POST /api/apartments/:id/schools/sync`
 - `GET /api/apartments/:id/commute` (planned)
 - `POST /api/apartments/:id/commute/refresh`
 
@@ -98,6 +109,15 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 - 기준 시각: 다음 평일 오전 7시 30분(Asia/Seoul)
 - 저장: `commute_times`에 `transit`, `driving` row를 upsert합니다. TMAP 상세 경로는 24시간 캐시 메타데이터로만 `source_ref`에 저장하고 `raw_api_responses`에는 장기 보존하지 않습니다.
 - 실패: `TMAP_API_KEY` 없음, 좌표/주소 없음, 권한 없음, TMAP API 오류를 명시적으로 반환합니다.
+
+`POST /api/apartments/:id/schools/sync`:
+
+- 인증: `Authorization: Bearer <Supabase access token>`
+- 권한: `app_metadata.role = admin`
+- 환경변수: `NEIS_API_KEY`
+- 동작: 단지 주소에서 시도명/구군명을 추출하고, NEIS `schoolInfo`에서 초등학교/중학교/고등학교를 조회합니다. 같은 구의 학교를 `schools`에 upsert하고, 단지와 학교의 연결 row를 `apartment_school_access`에 저장합니다.
+- 거리 계산: 단지와 학교 좌표가 모두 있으면 직선거리와 도보 추정 시간을 계산하고, 학교급별 최단 학교를 표시합니다. 좌표가 없으면 학교 연결만 저장하고 화면에는 `거리 계산 전`으로 표시합니다.
+- 실패: `NEIS_API_KEY` 없음, 주소에서 시도명 추출 실패, 권한 없음, NEIS API 오류를 명시적으로 반환합니다.
 
 ## Field Notes
 

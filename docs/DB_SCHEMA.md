@@ -230,6 +230,27 @@ K-apt 단지 코드 후보 검색용 캐시입니다. 공식 단지 목록 API �
 
 학교 기본정보와 좌표를 저장합니다.
 
+실제 migration: `supabase/migrations/20260601000200_schools.sql`
+
+- `user_id uuid references users(id)`
+- `source_name text`
+- `source_ref text`
+- `school_code text`
+- `office_code text`
+- `office_name text`
+- `school_name text`
+- `school_type text`: `elementary`, `middle`, `high`, `unknown`
+- `school_kind_name text`
+- `region_name text`
+- `district_office_name text`
+- `address text`
+- `road_address text`
+- `homepage_url text`
+- `phone text`
+- `coeducation_type text`
+- `founded_date date`
+- `lat numeric`
+- `lng numeric`
 - `source_name text`
 - `source_ref text`
 - `fetched_at timestamptz`
@@ -238,6 +259,20 @@ K-apt 단지 코드 후보 검색용 캐시입니다. 공식 단지 목록 API �
 ### apartment_school_access
 
 단지와 학교 간 거리, 도보 추정 시간, 가까운 학교 여부를 저장합니다.
+
+실제 migration: `supabase/migrations/20260601000200_schools.sql`
+
+- `user_id uuid references users(id)`
+- `apartment_id uuid references apartments(id)`
+- `school_id uuid references schools(id)`
+- `school_type text`
+- `distance_meters integer`
+- `walk_minutes integer`
+- `is_nearest_by_type boolean`
+- `source_name text`
+- `source_ref text`
+- `fetched_at timestamptz`
+- `confidence_level confidence_level`
 
 ### destinations
 

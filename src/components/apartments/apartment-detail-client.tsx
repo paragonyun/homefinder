@@ -33,8 +33,10 @@ import type {
   ApartmentBasicInfoRow,
   ApartmentBuildingInfoRow,
   ApartmentRowData,
+  ApartmentSchoolAccessRow,
   ApartmentTransactionRow,
   CommuteTimeRow,
+  SchoolRow,
 } from "@/lib/supabase/table-types";
 import { formatDate } from "@/utils/date";
 import { formatKrw } from "@/utils/format-price";
@@ -57,6 +59,25 @@ type BasicInfoSyncResult = {
   error?: string;
   kaptName?: string | null;
   fetchedAt?: string;
+};
+
+type BuildingInfoSyncResult = {
+  error?: string;
+  fetchedAt?: string;
+  matchedAddress?: string;
+  addressSource?: string;
+  floorAreaRatio?: number | null;
+  buildingCoverageRatio?: number | null;
+};
+
+type SchoolSyncResult = {
+  error?: string;
+  schoolCount?: number;
+  accessCount?: number;
+  regionName?: string | null;
+  districtName?: string | null;
+  fetchedAt?: string;
+  message?: string;
 };
 
 type CommuteRefreshResult = {
@@ -93,6 +114,10 @@ type KaptCodeResolveResult = {
   reason?: string;
 };
 
+type SchoolAccessWithSchool = ApartmentSchoolAccessRow & {
+  schools?: SchoolRow | null;
+};
+
 const sections = [
   ["건축정보", "건축물대장 후보 데이터가 확보되면 용적률, 건폐율, 대지면적을 표시합니다."],
   ["학군", "NEIS 학교기본정보와 거리 계산을 MVP 2에서 연결합니다."],
@@ -112,6 +137,9 @@ export function ApartmentDetailClient({
     useState<ApartmentBuildingInfoRow | null>(null);
   const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
   const [commuteTimes, setCommuteTimes] = useState<CommuteTimeRow[]>([]);
+  const [schoolAccessRows, setSchoolAccessRows] = useState<SchoolAccessWithSchool[]>(
+    [],
+  );
   const [candidateNames, setCandidateNames] = useState<
     Array<{ name: string; count: number }>
   >([]);
@@ -120,6 +148,8 @@ export function ApartmentDetailClient({
   >([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBasicInfoSyncing, setIsBasicInfoSyncing] = useState(false);
+  const [isBuildingInfoSyncing, setIsBuildingInfoSyncing] = useState(false);
+  const [isSchoolSyncing, setIsSchoolSyncing] = useState(false);
   const [isCommuteSyncing, setIsCommuteSyncing] = useState(false);
   const [isComprehensiveSyncing, setIsComprehensiveSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -141,6 +171,7 @@ export function ApartmentDetailClient({
       setBuildingInfo(null);
       setTransactions([]);
       setCommuteTimes([]);
+      setSchoolAccessRows([]);
       return;
     }
 
@@ -150,6 +181,7 @@ export function ApartmentDetailClient({
       { data: buildingInfoData, error: buildingInfoError },
       { data: transactionData, error: transactionError },
       { data: commuteData, error: commuteError },
+      { data: schoolAccessData, error: schoolAccessError },
     ] = await Promise.all([
       supabase
         .from("apartments")
@@ -181,6 +213,12 @@ export function ApartmentDetailClient({
         .select("*")
         .eq("apartment_id", apartmentId)
         .order("fetched_at", { ascending: false }),
+      supabase
+        .from("apartment_school_access")
+        .select("*,schools(*)")
+        .eq("apartment_id", apartmentId)
+        .order("school_type", { ascending: true })
+        .order("distance_meters", { ascending: true }),
     ]);
 
     if (apartmentError) {
@@ -222,6 +260,16 @@ export function ApartmentDetailClient({
         commuteError ? [] : ((commuteData ?? []) as CommuteTimeRow[]),
       );
     }
+
+    if (schoolAccessError && !isMissingTableError(schoolAccessError)) {
+      setMessage(schoolAccessError.message);
+    } else {
+      setSchoolAccessRows(
+        schoolAccessError
+          ? []
+          : ((schoolAccessData ?? []) as SchoolAccessWithSchool[]),
+      );
+    }
   }, [apartmentId, mockApartment, supabase]);
 
   useEffect(() => {
@@ -254,6 +302,7 @@ export function ApartmentDetailClient({
         setBuildingInfo(null);
         setTransactions([]);
         setCommuteTimes([]);
+        setSchoolAccessRows([]);
       }
     });
 
@@ -324,6 +373,50 @@ export function ApartmentDetailClient({
       );
     } finally {
       setIsBasicInfoSyncing(false);
+    }
+  }
+
+  async function handleBuildingInfoSync() {
+    if (!supabase || !session || !apartment || !isAdmin) {
+      setMessage("건축물대장 정보 동기화는 운영자 계정만 실행할 수 있습니다.");
+      return;
+    }
+
+    setIsBuildingInfoSyncing(true);
+    setMessage(null);
+
+    try {
+      const accessToken = await getAccessToken();
+      const result = await syncBuildingInfo(accessToken);
+
+      await loadApartment();
+      setMessage(formatBuildingInfoSyncMessage(result));
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsBuildingInfoSyncing(false);
+    }
+  }
+
+  async function handleSchoolSync() {
+    if (!supabase || !session || !apartment || !isAdmin) {
+      setMessage("학군 정보 동기화는 운영자 계정만 실행할 수 있습니다.");
+      return;
+    }
+
+    setIsSchoolSyncing(true);
+    setMessage(null);
+
+    try {
+      const accessToken = await getAccessToken();
+      const result = await syncSchools(accessToken);
+
+      await loadApartment();
+      setMessage(formatSchoolSyncMessage(result));
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsSchoolSyncing(false);
     }
   }
 
@@ -410,6 +503,20 @@ export function ApartmentDetailClient({
         }
       }
 
+      try {
+        const buildingInfoResult = await syncBuildingInfo(accessToken);
+        messages.push(`건축정보: ${formatBuildingInfoSyncMessage(buildingInfoResult)}`);
+      } catch (error) {
+        messages.push(`건축정보 실패: ${getErrorMessage(error)}`);
+      }
+
+      try {
+        const schoolResult = await syncSchools(accessToken);
+        messages.push(`학군: ${formatSchoolSyncMessage(schoolResult)}`);
+      } catch (error) {
+        messages.push(`학군 실패: ${getErrorMessage(error)}`);
+      }
+
       await loadApartment();
       setMessage(messages.join(" / "));
     } finally {
@@ -436,6 +543,12 @@ export function ApartmentDetailClient({
       }
 
       const basicInfoResult = await syncBasicInfo(accessToken);
+
+      try {
+        await syncBuildingInfo(accessToken);
+      } catch {
+        // 후보 선택 직후에는 K-apt 기본정보 저장이 주 작업입니다. 건축정보는 개별 버튼이나 종합 조회에서 다시 시도할 수 있습니다.
+      }
 
       setKaptCodeCandidates([]);
       await loadApartment();
@@ -503,6 +616,32 @@ export function ApartmentDetailClient({
     return result;
   }
 
+  async function syncBuildingInfo(accessToken: string) {
+    const { response, result } = await postApartmentJson<BuildingInfoSyncResult>(
+      `/api/apartments/${apartmentId}/building-info/sync`,
+      accessToken,
+    );
+
+    if (!response.ok) {
+      throw new Error(result.error ?? "건축물대장 정보 동기화에 실패했습니다.");
+    }
+
+    return result;
+  }
+
+  async function syncSchools(accessToken: string) {
+    const { response, result } = await postApartmentJson<SchoolSyncResult>(
+      `/api/apartments/${apartmentId}/schools/sync`,
+      accessToken,
+    );
+
+    if (!response.ok) {
+      throw new Error(result.error ?? "학군 정보 동기화에 실패했습니다.");
+    }
+
+    return result;
+  }
+
   async function refreshCommute(accessToken: string) {
     const { response, result } = await postApartmentJson<CommuteRefreshResult>(
       `/api/apartments/${apartmentId}/commute/refresh`,
@@ -543,6 +682,10 @@ export function ApartmentDetailClient({
       null,
     [apartmentId, commuteTimes],
   );
+  const schoolAccessByType = useMemo(
+    () => groupSchoolAccessByType(schoolAccessRows),
+    [schoolAccessRows],
+  );
   const totalTransactionCount = priceSummary.areaSummaries.reduce(
     (sum, summary) => sum + summary.transactionCount,
     0,
@@ -552,7 +695,12 @@ export function ApartmentDetailClient({
     basicInfo?.household_count ?? null,
   );
   const hasAnySyncInProgress =
-    isComprehensiveSyncing || isSyncing || isBasicInfoSyncing || isCommuteSyncing;
+    isComprehensiveSyncing ||
+    isSyncing ||
+    isBasicInfoSyncing ||
+    isBuildingInfoSyncing ||
+    isSchoolSyncing ||
+    isCommuteSyncing;
 
   return (
     <div className="grid gap-5">
@@ -703,6 +851,48 @@ export function ApartmentDetailClient({
         </div>
       </section>
 
+      <section className="grid min-w-0 gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+              학군/학교
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              NEIS 학교기본정보 기준으로 단지 주소와 같은 구의 초·중·고를
+              표시합니다. 실제 배정 학구는 교육청 기준이므로 별도 확인이
+              필요합니다.
+            </p>
+          </div>
+          {!mockApartment && session ? (
+            <button
+              type="button"
+              onClick={() => void handleSchoolSync()}
+              disabled={hasAnySyncInProgress || !isAdmin}
+              className="h-10 w-full rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-300 sm:w-auto"
+            >
+              {isSchoolSyncing ? "학군 조회 중" : "학군 정보 불러오기"}
+            </button>
+          ) : null}
+        </div>
+
+        {schoolAccessRows.length > 0 ? (
+          <div className="grid gap-3 lg:grid-cols-3">
+            {(["elementary", "middle", "high"] as const).map((schoolType) => (
+              <SchoolTypeCard
+                key={schoolType}
+                schoolType={schoolType}
+                rows={schoolAccessByType[schoolType] ?? []}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+            아직 저장된 학군 정보가 없습니다. 운영자 계정에서 학군 정보를
+            불러오면 학교명, 주소, 거리 계산 상태를 표시합니다.
+          </p>
+        )}
+      </section>
+
       {message || candidateNames.length > 0 || kaptCodeCandidates.length > 0 ? (
         <SyncStatusPanel
           message={message}
@@ -815,6 +1005,21 @@ export function ApartmentDetailClient({
             건축물대장 또는 수동 검증 데이터 기준으로 용적률과 건폐율을 표시합니다.
           </p>
         </div>
+
+        {!mockApartment && session ? (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void handleBuildingInfoSync()}
+              disabled={hasAnySyncInProgress || !isAdmin}
+              className="h-10 w-full rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-300 sm:w-auto"
+            >
+              {isBuildingInfoSyncing
+                ? "건축정보 조회 중"
+                : "건축물대장 정보 불러오기"}
+            </button>
+          </div>
+        ) : null}
 
         {buildingInfo ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1132,6 +1337,72 @@ function CommuteAccessCard({
       </div>
       <TransitRouteTimeline commute={transit} />
     </article>
+  );
+}
+
+function SchoolTypeCard({
+  rows,
+  schoolType,
+}: Readonly<{
+  rows: SchoolAccessWithSchool[];
+  schoolType: "elementary" | "middle" | "high";
+}>) {
+  const visibleRows = rows.slice(0, 5);
+
+  return (
+    <article className="grid min-w-0 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-slate-950">
+          {getSchoolTypeLabel(schoolType)}
+        </p>
+        <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
+          {rows.length.toLocaleString("ko-KR")}곳
+        </span>
+      </div>
+      {visibleRows.length > 0 ? (
+        <div className="grid gap-2">
+          {visibleRows.map((row) => (
+            <SchoolAccessItem key={row.id} row={row} />
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-md border border-dashed border-slate-300 bg-white p-3 text-sm text-slate-500">
+          저장된 학교가 없습니다.
+        </p>
+      )}
+    </article>
+  );
+}
+
+function SchoolAccessItem({ row }: Readonly<{ row: SchoolAccessWithSchool }>) {
+  const school = row.schools;
+  const distanceLabel =
+    row.distance_meters !== null
+      ? `${formatMeters(row.distance_meters)} · 도보 ${row.walk_minutes ?? "-"}분`
+      : "거리 계산 전";
+
+  return (
+    <div className="min-w-0 rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="break-keep text-sm font-semibold text-slate-950">
+            {school?.school_name ?? "학교명 없음"}
+          </p>
+          <p className="mt-1 break-words text-xs leading-5 text-slate-500">
+            {school?.road_address ?? school?.address ?? "주소 없음"}
+          </p>
+        </div>
+        {row.is_nearest_by_type ? (
+          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+            최단
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-2 text-xs font-semibold text-slate-700">{distanceLabel}</p>
+      <p className="mt-1 text-[11px] text-slate-400">
+        NEIS · {formatDate(row.fetched_at)}
+      </p>
+    </div>
   );
 }
 
@@ -1734,6 +2005,36 @@ function formatTrendPercent(value: number | null) {
   })}%`;
 }
 
+function groupSchoolAccessByType(rows: SchoolAccessWithSchool[]) {
+  return rows.reduce<
+    Record<"elementary" | "middle" | "high", SchoolAccessWithSchool[]>
+  >(
+    (groups, row) => {
+      if (
+        row.school_type === "elementary" ||
+        row.school_type === "middle" ||
+        row.school_type === "high"
+      ) {
+        groups[row.school_type].push(row);
+      }
+
+      return groups;
+    },
+    { elementary: [], middle: [], high: [] },
+  );
+}
+
+function getSchoolTypeLabel(type: "elementary" | "middle" | "high") {
+  switch (type) {
+    case "elementary":
+      return "초등학교";
+    case "middle":
+      return "중학교";
+    case "high":
+      return "고등학교";
+  }
+}
+
 async function readJsonResult<T>(response: Response): Promise<T> {
   try {
     return (await response.json()) as T;
@@ -1775,6 +2076,39 @@ function formatBasicInfoSyncMessage(result: BasicInfoSyncResult) {
   return result.kaptName
     ? `${result.kaptName} K-apt 기본정보를 반영했습니다.`
     : "K-apt 기본정보를 반영했습니다.";
+}
+
+function formatBuildingInfoSyncMessage(result: BuildingInfoSyncResult) {
+  const ratios = [
+    result.floorAreaRatio !== null && result.floorAreaRatio !== undefined
+      ? `용적률 ${formatRatioPercent(result.floorAreaRatio)}`
+      : null,
+    result.buildingCoverageRatio !== null &&
+    result.buildingCoverageRatio !== undefined
+      ? `건폐율 ${formatRatioPercent(result.buildingCoverageRatio)}`
+      : null,
+  ].filter(Boolean);
+  const prefix = ratios.length > 0 ? `${ratios.join(", ")}을` : "건축정보를";
+  const suffix = result.matchedAddress ? ` (${result.matchedAddress})` : "";
+
+  return `${prefix} 건축물대장에서 반영했습니다.${suffix}`;
+}
+
+function formatSchoolSyncMessage(result: SchoolSyncResult) {
+  const schoolCount = result.schoolCount ?? 0;
+  const accessCount = result.accessCount ?? 0;
+  const region = [result.regionName, result.districtName].filter(Boolean).join(" ");
+  const scope = region ? `${region} 기준으로 ` : "";
+
+  if (schoolCount === 0) {
+    return result.message ?? `${scope}학교 후보를 찾지 못했습니다.`;
+  }
+
+  return `${scope}학교 ${schoolCount.toLocaleString(
+    "ko-KR",
+  )}곳을 반영했고, ${accessCount.toLocaleString(
+    "ko-KR",
+  )}건의 단지-학교 연결을 저장했습니다.`;
 }
 
 function formatCommuteRefreshMessage(result: CommuteRefreshResult) {

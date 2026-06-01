@@ -138,6 +138,7 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 
 - API 키는 기본적으로 `TMAP_API_KEY` 하나로 서버 route에서만 읽습니다.
 - 대중교통과 자동차 키를 분리해야 하면 `TMAP_TRANSIT_API_KEY`, `TMAP_DRIVING_API_KEY`가 `TMAP_API_KEY`보다 우선됩니다.
+- 2026-06-01 기준 운영 키는 자동차 경로 조회는 동작하지만 대중교통 조회에서 권한 오류가 확인됐습니다. 대중교통은 TMAP 대중교통 API 상품 권한이 있는 앱키를 `TMAP_TRANSIT_API_KEY`에 별도로 등록한 뒤 재검증합니다.
 - 기준 시각은 다음 평일 오전 7시 30분(Asia/Seoul)입니다.
 - 단지 좌표가 없으면 TMAP 지오코딩으로 주소를 좌표화하고 `apartments.lat/lng`에 저장합니다.
 - 여의도역/강남역 각각 대중교통(`transit`)과 자동차(`driving`) row를 `commute_times`에 upsert합니다.

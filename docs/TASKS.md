@@ -70,10 +70,13 @@
 - [x] Supabase에 `20260529000100_commute_times.sql` 적용
 - [x] TMAP 기반 대중교통/자동차 접근성 자동 조회 route 작성
 - [x] 대중교통 상세 경로 timeline UI 작성
-- [ ] Vercel에 `TMAP_API_KEY` 등록
+- [x] Vercel에 `TMAP_API_KEY` 등록
+- [x] TMAP 자동차 접근성 운영 조회 검증
+- [ ] Vercel에 대중교통 API 권한이 있는 `TMAP_TRANSIT_API_KEY` 등록
+- [ ] TMAP 대중교통 접근성 운영 조회 검증
 - [x] `apartment_building_info` migration 작성
 - [x] 상세/비교/대시보드에 용적률, 건폐율, 세대당 주차수 표시
-- [ ] Supabase에 `20260601000100_apartment_building_info.sql` 적용
+- [x] Supabase에 `20260601000100_apartment_building_info.sql` 적용
 - [x] 건축물대장 기반 `apartment_building_info` 자동 조회 route 작성
 - [ ] 공공데이터포털 건축HUB 건축물대장정보 서비스 활용신청/운영 호출 검증
 
@@ -81,8 +84,8 @@
 - [x] NEIS 학교기본정보 parser 테스트
 - [x] NEIS 기반 학군 정보 동기화 route 작성
 - [x] 단지 상세 화면 학군/학교 섹션 표시
-- [ ] Supabase에 `20260601000200_schools.sql` 적용
-- [ ] Vercel에 `NEIS_API_KEY` 등록
+- [x] Supabase에 `20260601000200_schools.sql` 적용
+- [x] Vercel에 `NEIS_API_KEY` 등록
 - [ ] 실제 NEIS API 응답으로 운영 학군 동기화 검증
 
 ## 운영 적용 메모
@@ -98,10 +101,11 @@
 - [x] Supabase에 `20260520000200_apartment_basic_info.sql` 적용
 - [x] Supabase에 `20260529000100_commute_times.sql` 적용 확인
 - [x] Vercel에 `KAPT_API_KEY` 등록
-- [ ] Vercel에 `TMAP_API_KEY` 등록
-- [ ] Supabase에 `20260601000100_apartment_building_info.sql` 적용
-- [ ] Supabase에 `20260601000200_schools.sql` 적용
-- [ ] Vercel에 `NEIS_API_KEY` 등록
+- [x] Vercel에 `TMAP_API_KEY` 등록
+- [ ] Vercel에 대중교통 API 권한이 있는 `TMAP_TRANSIT_API_KEY` 등록
+- [x] Supabase에 `20260601000100_apartment_building_info.sql` 적용
+- [x] Supabase에 `20260601000200_schools.sql` 적용
+- [x] Vercel에 `NEIS_API_KEY` 등록
 - [x] Supabase 운영자 계정 `app_metadata.role = admin` 설정 확인
 
 ## 금지/주의
@@ -117,9 +121,16 @@
 
 - [x] Supabase SQL Editor에 `supabase/migrations/20260521000100_kapt_code_directory.sql` 적용
 - [x] `kapt_code_directory` 서울 단지 디렉터리 seed 적용
+- [x] Supabase SQL Editor에 `supabase/migrations/20260601000100_apartment_building_info.sql` 적용
+- [x] Supabase SQL Editor에 `supabase/migrations/20260601000200_schools.sql` 적용
+- [ ] TMAP 대중교통 API 상품 권한이 있는 appKey를 발급해 Vercel Production `TMAP_TRANSIT_API_KEY`에 등록하고 redeploy
+- [ ] 공공데이터포털 건축HUB 건축물대장정보 서비스 활용신청 및 운영 조회 성공 확인
+- [ ] 단지 상세에서 학군 정보 불러오기를 실행해 실제 NEIS 응답 저장 확인
 
 ## 다음 개선 후보
 
 - [x] 건축물대장 기반 `apartment_building_info` 자동 조회 파이프라인 구현
-  - 현재는 테이블과 화면 표시를 먼저 구현했습니다.
-  - 자동 조회는 주소/지번 매칭 정확도 검증 뒤 별도 공식 데이터 소스로 연결합니다.
+  - 주소/지번 기반 건축물대장 조회 route와 화면 표시까지 구현했습니다.
+  - 남은 작업은 실제 공공데이터포털 권한으로 운영 호출을 검증하는 것입니다.
+- [ ] TMAP 대중교통 응답 권한 확보 뒤 여의도역/강남역 대중교통 route 운영 검증
+- [ ] 학군 데이터는 현재 가까운 학교 후보 기준입니다. 실제 통학구/중학군 배정 데이터는 별도 공식 소스 확인 후 확장합니다.

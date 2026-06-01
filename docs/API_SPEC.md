@@ -108,7 +108,7 @@ sync API는 원천 응답 저장 후 정규화 데이터를 생성합니다. 실
 - 동작: 단지 좌표가 없으면 TMAP 지오코딩으로 주소를 좌표화하고, 여의도역/강남역까지 대중교통/자동차 경로를 조회합니다.
 - 기준 시각: 다음 평일 오전 7시 30분(Asia/Seoul)
 - 저장: `commute_times`에 `transit`, `driving` row를 upsert합니다. TMAP 상세 경로는 24시간 캐시 메타데이터로만 `source_ref`에 저장하고 `raw_api_responses`에는 장기 보존하지 않습니다.
-- 실패: `TMAP_API_KEY` 없음, 좌표/주소 없음, 권한 없음, TMAP API 오류를 명시적으로 반환합니다.
+- 실패: `TMAP_API_KEY` 없음, 좌표/주소 없음, 권한 없음, TMAP API 오류를 명시적으로 반환합니다. 자동차만 동작하고 대중교통이 권한 오류를 반환하면 대중교통 API 상품 권한이 있는 키를 `TMAP_TRANSIT_API_KEY`로 등록합니다.
 
 `POST /api/apartments/:id/schools/sync`:
 

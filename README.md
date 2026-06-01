@@ -89,8 +89,10 @@ K-apt 기본정보 동기화에는 `KAPT_API_KEY`가 필요합니다. 공공데�
 강남역/여의도역 접근성 자동 조회에는 `TMAP_API_KEY`가 필요합니다. TMAP
 대중교통/자동차 API를 사용할 수 있는 앱키를 Vercel 환경변수에 추가하고 다시
 배포합니다. 기본은 `TMAP_API_KEY` 하나를 쓰며, 키를 분리해야 하면
-`TMAP_TRANSIT_API_KEY`, `TMAP_DRIVING_API_KEY`를 추가로 설정합니다. TMAP 조회
-결과는 약관을 고려해 24시간 캐시로만 표시하고, 만료 후에는 다시 조회합니다.
+`TMAP_TRANSIT_API_KEY`, `TMAP_DRIVING_API_KEY`를 추가로 설정합니다. 자동차는
+동작하지만 대중교통에서 `API 키 권한 확인 필요`가 나오면 대중교통 API 상품 권한이
+있는 앱키를 `TMAP_TRANSIT_API_KEY`로 따로 등록합니다. TMAP 조회 결과는 약관을
+고려해 24시간 캐시로만 표시하고, 만료 후에는 다시 조회합니다.
 
 ## 운영자 계정 설정
 

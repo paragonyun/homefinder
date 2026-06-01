@@ -32,6 +32,13 @@ export type ComparisonBasicInfo = {
   fetched_at: string | null;
 };
 
+export type ComparisonBuildingInfo = {
+  apartment_id: string;
+  floor_area_ratio: number | null;
+  building_coverage_ratio: number | null;
+  fetched_at: string | null;
+};
+
 export type ComparisonCommuteTime = CommuteTimeLike;
 
 export type ApartmentComparisonRow = {
@@ -49,9 +56,12 @@ export type ApartmentComparisonRow = {
   buildingCount: number | null;
   parkingCount: number | null;
   parkingPerHousehold: number | null;
+  floorAreaRatio: number | null;
+  buildingCoverageRatio: number | null;
   approvalDate: string | null;
   buildingAgeYears: number | null;
   basicInfoFetchedAt: string | null;
+  buildingInfoFetchedAt: string | null;
   commuteToYeouido: CommuteSummary | null;
   commuteToGangnam: CommuteSummary | null;
   driveToYeouido: CommuteSummary | null;
@@ -70,8 +80,11 @@ export function buildApartmentComparisonRows(
   transactions: ComparisonTransaction[],
   basicInfos: ComparisonBasicInfo[] = [],
   commuteTimes: ComparisonCommuteTime[] = [],
+  buildingInfos: ComparisonBuildingInfo[] = [],
 ): ApartmentComparisonRow[] {
   const latestBasicInfoByApartmentId = getLatestBasicInfoByApartmentId(basicInfos);
+  const latestBuildingInfoByApartmentId =
+    getLatestBuildingInfoByApartmentId(buildingInfos);
   const commuteSummaryByApartmentId =
     buildCommuteAccessSummaryByApartment(commuteTimes);
 
@@ -86,6 +99,8 @@ export function buildApartmentComparisonRows(
       0,
     );
     const basicInfo = latestBasicInfoByApartmentId.get(apartment.id) ?? null;
+    const buildingInfo =
+      latestBuildingInfoByApartmentId.get(apartment.id) ?? null;
     const commuteSummary = commuteSummaryByApartmentId.get(apartment.id) ?? null;
 
     return {
@@ -106,9 +121,12 @@ export function buildApartmentComparisonRows(
         basicInfo?.parking_count ?? null,
         basicInfo?.household_count ?? null,
       ),
+      floorAreaRatio: buildingInfo?.floor_area_ratio ?? null,
+      buildingCoverageRatio: buildingInfo?.building_coverage_ratio ?? null,
       approvalDate: basicInfo?.approval_date ?? null,
       buildingAgeYears: getBuildingAgeYears(basicInfo?.approval_date ?? null),
       basicInfoFetchedAt: basicInfo?.fetched_at ?? null,
+      buildingInfoFetchedAt: buildingInfo?.fetched_at ?? null,
       commuteToYeouido: commuteSummary?.yeouido_station.transit ?? null,
       commuteToGangnam: commuteSummary?.gangnam_station.transit ?? null,
       driveToYeouido: commuteSummary?.yeouido_station.driving ?? null,
@@ -122,6 +140,25 @@ export function buildApartmentComparisonRows(
       })),
     };
   });
+}
+
+function getLatestBuildingInfoByApartmentId(
+  buildingInfos: ComparisonBuildingInfo[],
+) {
+  const latestByApartmentId = new Map<string, ComparisonBuildingInfo>();
+
+  for (const buildingInfo of buildingInfos) {
+    const current = latestByApartmentId.get(buildingInfo.apartment_id);
+
+    if (
+      !current ||
+      (buildingInfo.fetched_at ?? "").localeCompare(current.fetched_at ?? "") > 0
+    ) {
+      latestByApartmentId.set(buildingInfo.apartment_id, buildingInfo);
+    }
+  }
+
+  return latestByApartmentId;
 }
 
 function getLatestBasicInfoByApartmentId(basicInfos: ComparisonBasicInfo[]) {

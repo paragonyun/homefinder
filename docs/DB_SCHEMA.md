@@ -200,8 +200,14 @@ K-apt 단지 코드 후보 검색용 캐시입니다. 공식 단지 목록 API �
 
 ### apartment_building_info
 
+실제 migration: `supabase/migrations/20260601000100_apartment_building_info.sql`
+
 - `id uuid primary key`
+- `user_id uuid references users(id)`
 - `apartment_id uuid references apartments(id)`
+- `raw_api_response_id uuid references raw_api_responses(id)`
+- `legal_address_from_source text`
+- `road_address_from_source text`
 - `land_area_m2 numeric`
 - `building_area_m2 numeric`
 - `gross_floor_area_m2 numeric`

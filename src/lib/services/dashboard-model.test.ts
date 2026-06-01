@@ -3,6 +3,7 @@ import {
   buildDashboardModel,
   type DashboardApartment,
   type DashboardBasicInfo,
+  type DashboardBuildingInfo,
   type DashboardCommuteTime,
   type DashboardNeighborhood,
   type DashboardTransaction,
@@ -76,6 +77,15 @@ const basicInfos: DashboardBasicInfo[] = [
   },
 ];
 
+const buildingInfos: DashboardBuildingInfo[] = [
+  {
+    apartment_id: "dream",
+    floor_area_ratio: 249.35,
+    building_coverage_ratio: 18.42,
+    fetched_at: "2026-06-01T00:00:00.000Z",
+  },
+];
+
 const commuteTimes: DashboardCommuteTime[] = [
   {
     apartment_id: "dream",
@@ -102,6 +112,7 @@ describe("buildDashboardModel", () => {
     const model = buildDashboardModel({
       apartments,
       basicInfos,
+      buildingInfos,
       commuteTimes,
       neighborhoods,
       transactions,
@@ -130,6 +141,9 @@ describe("buildDashboardModel", () => {
     expect(model.neighborhoods[0].representativeApartments[0]).toMatchObject({
       id: "dream",
       name: "관악드림타운",
+      parkingPerHousehold: 5_404 / 3_544,
+      floorAreaRatio: 249.35,
+      buildingCoverageRatio: 18.42,
       evidence: expect.arrayContaining(["최근 거래 있음", "강남 31분"]),
     });
   });
@@ -138,6 +152,7 @@ describe("buildDashboardModel", () => {
     const model = buildDashboardModel({
       apartments,
       basicInfos,
+      buildingInfos,
       commuteTimes,
       neighborhoods,
       transactions,

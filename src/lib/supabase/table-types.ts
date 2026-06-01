@@ -86,6 +86,30 @@ export type ApartmentBasicInfoRow = {
   updated_at: string;
 };
 
+export type ApartmentBuildingInfoRow = {
+  id: string;
+  user_id: string;
+  apartment_id: string;
+  raw_api_response_id: string | null;
+  source_name: string;
+  source_ref: string | null;
+  legal_address_from_source: string | null;
+  road_address_from_source: string | null;
+  land_area_m2: number | null;
+  building_area_m2: number | null;
+  gross_floor_area_m2: number | null;
+  floor_area_ratio: number | null;
+  building_coverage_ratio: number | null;
+  main_use: string | null;
+  highest_floor: number | null;
+  lowest_floor: number | null;
+  structure_type: string | null;
+  confidence_level: "high" | "medium" | "low" | "manual" | "unknown";
+  fetched_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CommuteTimeRow = {
   id: string;
   user_id: string;

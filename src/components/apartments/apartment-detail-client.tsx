@@ -31,6 +31,7 @@ import {
 } from "@/lib/supabase/client";
 import type {
   ApartmentBasicInfoRow,
+  ApartmentBuildingInfoRow,
   ApartmentRowData,
   ApartmentTransactionRow,
   CommuteTimeRow,
@@ -107,6 +108,8 @@ export function ApartmentDetailClient({
   const [session, setSession] = useState<Session | null>(null);
   const [apartment, setApartment] = useState<ApartmentRowData | null>(null);
   const [basicInfo, setBasicInfo] = useState<ApartmentBasicInfoRow | null>(null);
+  const [buildingInfo, setBuildingInfo] =
+    useState<ApartmentBuildingInfoRow | null>(null);
   const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
   const [commuteTimes, setCommuteTimes] = useState<CommuteTimeRow[]>([]);
   const [candidateNames, setCandidateNames] = useState<
@@ -135,6 +138,7 @@ export function ApartmentDetailClient({
     if (!sessionData.session) {
       setApartment(null);
       setBasicInfo(null);
+      setBuildingInfo(null);
       setTransactions([]);
       setCommuteTimes([]);
       return;
@@ -143,6 +147,7 @@ export function ApartmentDetailClient({
     const [
       { data: apartmentData, error: apartmentError },
       { data: basicInfoData, error: basicInfoError },
+      { data: buildingInfoData, error: buildingInfoError },
       { data: transactionData, error: transactionError },
       { data: commuteData, error: commuteError },
     ] = await Promise.all([
@@ -153,6 +158,13 @@ export function ApartmentDetailClient({
         .maybeSingle(),
       supabase
         .from("apartment_basic_info")
+        .select("*")
+        .eq("apartment_id", apartmentId)
+        .order("fetched_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("apartment_building_info")
         .select("*")
         .eq("apartment_id", apartmentId)
         .order("fetched_at", { ascending: false })
@@ -184,6 +196,16 @@ export function ApartmentDetailClient({
         basicInfoError
           ? null
           : ((basicInfoData as ApartmentBasicInfoRow | null) ?? null),
+      );
+    }
+
+    if (buildingInfoError && !isMissingTableError(buildingInfoError)) {
+      setMessage(buildingInfoError.message);
+    } else {
+      setBuildingInfo(
+        buildingInfoError
+          ? null
+          : ((buildingInfoData as ApartmentBuildingInfoRow | null) ?? null),
       );
     }
 
@@ -229,6 +251,7 @@ export function ApartmentDetailClient({
       } else {
         setApartment(null);
         setBasicInfo(null);
+        setBuildingInfo(null);
         setTransactions([]);
         setCommuteTimes([]);
       }
@@ -524,6 +547,10 @@ export function ApartmentDetailClient({
     (sum, summary) => sum + summary.transactionCount,
     0,
   );
+  const parkingPerHousehold = getParkingPerHousehold(
+    basicInfo?.parking_count ?? null,
+    basicInfo?.household_count ?? null,
+  );
   const hasAnySyncInProgress =
     isComprehensiveSyncing || isSyncing || isBasicInfoSyncing || isCommuteSyncing;
 
@@ -610,6 +637,23 @@ export function ApartmentDetailClient({
               label="주차"
               value={formatOptionalCount(basicInfo?.parking_count ?? null, "대")}
               detail={basicInfo ? "총 주차대수" : "기본정보 필요"}
+            />
+            <HeroMetric
+              label="주차/세대"
+              value={formatParkingPerHousehold(parkingPerHousehold)}
+              detail={basicInfo ? "세대당 주차수" : "기본정보 필요"}
+            />
+            <HeroMetric
+              label="용적률"
+              value={formatRatioPercent(buildingInfo?.floor_area_ratio ?? null)}
+              detail={buildingInfo ? "건축물대장 기준" : "건축정보 필요"}
+            />
+            <HeroMetric
+              label="건폐율"
+              value={formatRatioPercent(
+                buildingInfo?.building_coverage_ratio ?? null,
+              )}
+              detail={buildingInfo ? "건축물대장 기준" : "건축정보 필요"}
             />
             <HeroMetric
               label="사용승인"
@@ -746,6 +790,10 @@ export function ApartmentDetailClient({
               value={formatOptionalCount(basicInfo.parking_count, "대")}
             />
             <BasicInfoItem
+              label="주차/세대"
+              value={formatParkingPerHousehold(parkingPerHousehold)}
+            />
+            <BasicInfoItem
               label="출처 갱신"
               value={`${basicInfo.source_name} · ${formatDate(basicInfo.fetched_at)}`}
             />
@@ -754,6 +802,46 @@ export function ApartmentDetailClient({
           <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
             아직 저장된 K-apt 기본정보가 없습니다. 운영자 계정에서 종합 조회를
             실행하거나 K-apt 코드를 확인한 뒤 기본정보를 불러오세요.
+          </p>
+        )}
+      </section>
+
+      <section className="grid min-w-0 gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div>
+          <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+            건축 밀도
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            건축물대장 또는 수동 검증 데이터 기준으로 용적률과 건폐율을 표시합니다.
+          </p>
+        </div>
+
+        {buildingInfo ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <BasicInfoItem
+              label="용적률"
+              value={formatRatioPercent(buildingInfo.floor_area_ratio)}
+            />
+            <BasicInfoItem
+              label="건폐율"
+              value={formatRatioPercent(buildingInfo.building_coverage_ratio)}
+            />
+            <BasicInfoItem
+              label="대지면적"
+              value={formatSquareMeters(buildingInfo.land_area_m2)}
+            />
+            <BasicInfoItem
+              label="출처 갱신"
+              value={`${buildingInfo.source_name} · ${formatDate(
+                buildingInfo.fetched_at,
+              )}`}
+            />
+          </div>
+        ) : (
+          <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+            아직 저장된 건축 밀도 정보가 없습니다. `apartment_building_info`
+            테이블에 용적률과 건폐율을 저장하면 이 영역과 비교 화면에 함께
+            표시됩니다.
           </p>
         )}
       </section>
@@ -1718,6 +1806,42 @@ function formatCandidateAddress(candidate: KaptCodeCandidate) {
 
 function formatOptionalCount(value: number | null, suffix: string) {
   return value !== null ? `${value.toLocaleString("ko-KR")}${suffix}` : "-";
+}
+
+function getParkingPerHousehold(
+  parkingCount: number | null,
+  householdCount: number | null,
+) {
+  if (
+    parkingCount === null ||
+    householdCount === null ||
+    householdCount <= 0
+  ) {
+    return null;
+  }
+
+  return parkingCount / householdCount;
+}
+
+function formatParkingPerHousehold(value: number | null) {
+  return value !== null
+    ? `${value.toLocaleString("ko-KR", {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      })}대`
+    : "-";
+}
+
+function formatRatioPercent(value: number | null) {
+  return value !== null
+    ? `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`
+    : "-";
+}
+
+function formatSquareMeters(value: number | null) {
+  return value !== null
+    ? `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}㎡`
+    : "-";
 }
 
 function isMissingTableError(error: { code?: string }) {

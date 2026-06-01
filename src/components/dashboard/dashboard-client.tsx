@@ -9,6 +9,7 @@ import {
   buildDashboardModel,
   type DashboardApartment,
   type DashboardBasicInfo,
+  type DashboardBuildingInfo,
   type DashboardCommuteTime,
   type DashboardModel,
   type DashboardNeighborhood,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/supabase/client";
 import type {
   ApartmentBasicInfoRow,
+  ApartmentBuildingInfoRow,
   ApartmentRowData,
   ApartmentTransactionRow,
   CommuteTimeRow,
@@ -84,6 +86,14 @@ const mockDashboardModel = buildDashboardModel({
       parking_count: 5_404,
       approval_date: "2003-09-30",
       fetched_at: "2026-05-27T00:00:00.000Z",
+    },
+  ],
+  buildingInfos: [
+    {
+      apartment_id: "mock-dream",
+      floor_area_ratio: 249.35,
+      building_coverage_ratio: 18.42,
+      fetched_at: "2026-06-01T00:00:00.000Z",
     },
   ],
   commuteTimes: [
@@ -173,7 +183,7 @@ export function DashboardClient() {
       return;
     }
 
-    const [transactionResult, basicInfoResult, commuteResult] =
+    const [transactionResult, basicInfoResult, buildingInfoResult, commuteResult] =
       await Promise.all([
         supabase
           .from("apartment_transactions")
@@ -183,6 +193,12 @@ export function DashboardClient() {
           .from("apartment_basic_info")
           .select(
             "apartment_id,household_count,parking_count,approval_date,fetched_at",
+          )
+          .in("apartment_id", apartmentIds),
+        supabase
+          .from("apartment_building_info")
+          .select(
+            "apartment_id,floor_area_ratio,building_coverage_ratio,fetched_at",
           )
           .in("apartment_id", apartmentIds),
         supabase
@@ -197,6 +213,9 @@ export function DashboardClient() {
     const basicInfos = isMissingTableError(basicInfoResult.error)
       ? []
       : ((basicInfoResult.data ?? []) as ApartmentBasicInfoRow[]);
+    const buildingInfos = isMissingTableError(buildingInfoResult.error)
+      ? []
+      : ((buildingInfoResult.data ?? []) as ApartmentBuildingInfoRow[]);
     const commuteTimes = isMissingTableError(commuteResult.error)
       ? []
       : ((commuteResult.data ?? []) as CommuteTimeRow[]);
@@ -209,6 +228,13 @@ export function DashboardClient() {
       notices.push(basicInfoResult.error.message);
     }
 
+    if (
+      buildingInfoResult.error &&
+      !isMissingTableError(buildingInfoResult.error)
+    ) {
+      notices.push(buildingInfoResult.error.message);
+    }
+
     if (commuteResult.error && !isMissingTableError(commuteResult.error)) {
       notices.push(commuteResult.error.message);
     }
@@ -218,6 +244,7 @@ export function DashboardClient() {
       buildDashboardModel({
         apartments: apartments.map(toDashboardApartment),
         basicInfos: basicInfos.map(toDashboardBasicInfo),
+        buildingInfos: buildingInfos.map(toDashboardBuildingInfo),
         commuteTimes: commuteTimes.map(toDashboardCommuteTime),
         neighborhoods: ((neighborhoodRows ?? []) as NeighborhoodRow[]).map(
           toDashboardNeighborhood,
@@ -609,6 +636,17 @@ function toDashboardBasicInfo(row: ApartmentBasicInfoRow): DashboardBasicInfo {
   };
 }
 
+function toDashboardBuildingInfo(
+  row: ApartmentBuildingInfoRow,
+): DashboardBuildingInfo {
+  return {
+    apartment_id: row.apartment_id,
+    floor_area_ratio: row.floor_area_ratio,
+    building_coverage_ratio: row.building_coverage_ratio,
+    fetched_at: row.fetched_at,
+  };
+}
+
 function toDashboardCommuteTime(row: CommuteTimeRow): DashboardCommuteTime {
   return {
     apartment_id: row.apartment_id,
@@ -619,5 +657,5 @@ function toDashboardCommuteTime(row: CommuteTimeRow): DashboardCommuteTime {
 }
 
 function isMissingTableError(error: { code?: string } | null) {
-  return error?.code === "42P01";
+  return error?.code === "42P01" || error?.code === "PGRST205";
 }

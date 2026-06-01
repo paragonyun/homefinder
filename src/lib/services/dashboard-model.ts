@@ -31,6 +31,13 @@ export type DashboardBasicInfo = {
   fetched_at: string | null;
 };
 
+export type DashboardBuildingInfo = {
+  apartment_id: string;
+  floor_area_ratio: number | null;
+  building_coverage_ratio: number | null;
+  fetched_at: string | null;
+};
+
 export type DashboardCommuteTime = {
   apartment_id: string;
   destination_key: "yeouido_station" | "gangnam_station";
@@ -43,6 +50,7 @@ export type DashboardModelInput = {
   apartments: DashboardApartment[];
   transactions: DashboardTransaction[];
   basicInfos?: DashboardBasicInfo[];
+  buildingInfos?: DashboardBuildingInfo[];
   commuteTimes?: DashboardCommuteTime[];
 };
 
@@ -54,6 +62,9 @@ export type DashboardApartmentSummary = {
   latestPriceKrw: number | null;
   latestDealDate: string | null;
   householdCount: number | null;
+  parkingPerHousehold: number | null;
+  floorAreaRatio: number | null;
+  buildingCoverageRatio: number | null;
   gangnamMinutes: number | null;
   yeouidoMinutes: number | null;
   evidence: string[];
@@ -101,6 +112,9 @@ export function buildDashboardModel(input: DashboardModelInput): DashboardModel 
   const latestBasicInfoByApartmentId = getLatestBasicInfoByApartmentId(
     input.basicInfos ?? [],
   );
+  const latestBuildingInfoByApartmentId = getLatestBuildingInfoByApartmentId(
+    input.buildingInfos ?? [],
+  );
   const commuteByApartmentId = getCommuteByApartmentId(input.commuteTimes ?? []);
   const apartmentSummaries = input.apartments.map((apartment) =>
     summarizeApartment({
@@ -108,6 +122,7 @@ export function buildDashboardModel(input: DashboardModelInput): DashboardModel 
       commute: commuteByApartmentId.get(apartment.id) ?? emptyCommute(),
       transactions: transactionsByApartmentId.get(apartment.id) ?? [],
       basicInfo: latestBasicInfoByApartmentId.get(apartment.id) ?? null,
+      buildingInfo: latestBuildingInfoByApartmentId.get(apartment.id) ?? null,
     }),
   );
   const apartmentSummaryById = new Map(
@@ -196,11 +211,13 @@ function summarizeNeighborhood(
 function summarizeApartment({
   apartment,
   basicInfo,
+  buildingInfo,
   commute,
   transactions,
 }: {
   apartment: DashboardApartment;
   basicInfo: DashboardBasicInfo | null;
+  buildingInfo: DashboardBuildingInfo | null;
   commute: ReturnType<typeof emptyCommute>;
   transactions: DashboardTransaction[];
 }): DashboardApartmentSummary {
@@ -210,12 +227,27 @@ function summarizeApartment({
   const latestPriceKrw = latestTransaction?.deal_amount_krw ?? null;
   const gangnamMinutes = commute.gangnam_station.transit;
   const yeouidoMinutes = commute.yeouido_station.transit;
+  const parkingPerHousehold = getParkingPerHousehold(
+    basicInfo?.parking_count ?? null,
+    basicInfo?.household_count ?? null,
+  );
   const evidence = [
     apartment.status === "interested" ? "관심" : null,
     latestPriceKrw !== null ? "최근 거래 있음" : null,
     gangnamMinutes !== null ? `강남 ${gangnamMinutes}분` : null,
     yeouidoMinutes !== null ? `여의도 ${yeouidoMinutes}분` : null,
     (basicInfo?.household_count ?? 0) >= 1000 ? "1,000세대 이상" : null,
+    parkingPerHousehold !== null
+      ? `주차/세대 ${formatParkingPerHousehold(parkingPerHousehold)}`
+      : null,
+    buildingInfo?.floor_area_ratio !== null &&
+    buildingInfo?.floor_area_ratio !== undefined
+      ? `용적률 ${formatRatioPercent(buildingInfo.floor_area_ratio)}`
+      : null,
+    buildingInfo?.building_coverage_ratio !== null &&
+    buildingInfo?.building_coverage_ratio !== undefined
+      ? `건폐율 ${formatRatioPercent(buildingInfo.building_coverage_ratio)}`
+      : null,
   ].filter(Boolean) as string[];
   const missingBadges = [
     latestPriceKrw === null ? "가격 미확인" : null,
@@ -230,11 +262,40 @@ function summarizeApartment({
     latestPriceKrw,
     latestDealDate: latestTransaction?.deal_date ?? null,
     householdCount: basicInfo?.household_count ?? null,
+    parkingPerHousehold,
+    floorAreaRatio: buildingInfo?.floor_area_ratio ?? null,
+    buildingCoverageRatio: buildingInfo?.building_coverage_ratio ?? null,
     gangnamMinutes,
     yeouidoMinutes,
     evidence,
     missingBadges,
   };
+}
+
+function getParkingPerHousehold(
+  parkingCount: number | null,
+  householdCount: number | null,
+) {
+  if (
+    parkingCount === null ||
+    householdCount === null ||
+    householdCount <= 0
+  ) {
+    return null;
+  }
+
+  return parkingCount / householdCount;
+}
+
+function formatParkingPerHousehold(value: number) {
+  return `${value.toLocaleString("ko-KR", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })}대`;
+}
+
+function formatRatioPercent(value: number) {
+  return `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`;
 }
 
 function rankPriorityApartments(apartments: DashboardApartmentSummary[]) {
@@ -307,6 +368,20 @@ function getLatestBasicInfoByApartmentId(basicInfos: DashboardBasicInfo[]) {
 
     if (!current || (basicInfo.fetched_at ?? "") > (current.fetched_at ?? "")) {
       byApartmentId.set(basicInfo.apartment_id, basicInfo);
+    }
+  }
+
+  return byApartmentId;
+}
+
+function getLatestBuildingInfoByApartmentId(buildingInfos: DashboardBuildingInfo[]) {
+  const byApartmentId = new Map<string, DashboardBuildingInfo>();
+
+  for (const buildingInfo of buildingInfos) {
+    const current = byApartmentId.get(buildingInfo.apartment_id);
+
+    if (!current || (buildingInfo.fetched_at ?? "") > (current.fetched_at ?? "")) {
+      byApartmentId.set(buildingInfo.apartment_id, buildingInfo);
     }
   }
 

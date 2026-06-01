@@ -65,9 +65,12 @@ describe("buildApartmentComparisonRows", () => {
         buildingCount: null,
         parkingCount: null,
         parkingPerHousehold: null,
+        floorAreaRatio: null,
+        buildingCoverageRatio: null,
         approvalDate: null,
         buildingAgeYears: null,
         basicInfoFetchedAt: null,
+        buildingInfoFetchedAt: null,
         commuteToYeouido: null,
         commuteToGangnam: null,
         driveToYeouido: null,
@@ -97,9 +100,12 @@ describe("buildApartmentComparisonRows", () => {
         buildingCount: null,
         parkingCount: null,
         parkingPerHousehold: null,
+        floorAreaRatio: null,
+        buildingCoverageRatio: null,
         approvalDate: null,
         buildingAgeYears: null,
         basicInfoFetchedAt: null,
+        buildingInfoFetchedAt: null,
         commuteToYeouido: null,
         commuteToGangnam: null,
         driveToYeouido: null,
@@ -160,6 +166,45 @@ describe("buildApartmentComparisonRows", () => {
     });
     expect(rows[0].parkingPerHousehold).toBeCloseTo(4_102 / 3_544, 5);
     expect(rows[0].buildingAgeYears).toBeGreaterThanOrEqual(20);
+  });
+
+  it("merges the latest building density info into comparison rows", () => {
+    const rows = buildApartmentComparisonRows(
+      [
+        {
+          id: "apt-1",
+          name: "관악드림타운",
+          display_name: null,
+          address: null,
+          lawd_cd: null,
+          status: "candidate",
+          memo: null,
+        },
+      ],
+      [],
+      [],
+      [],
+      [
+        {
+          apartment_id: "apt-1",
+          floor_area_ratio: 249.35,
+          building_coverage_ratio: 18.42,
+          fetched_at: "2026-06-01T10:00:00.000Z",
+        },
+        {
+          apartment_id: "apt-1",
+          floor_area_ratio: 240,
+          building_coverage_ratio: 20,
+          fetched_at: "2026-05-31T10:00:00.000Z",
+        },
+      ],
+    );
+
+    expect(rows[0]).toMatchObject({
+      floorAreaRatio: 249.35,
+      buildingCoverageRatio: 18.42,
+      buildingInfoFetchedAt: "2026-06-01T10:00:00.000Z",
+    });
   });
 
   it("merges commute times for Yeouido and Gangnam access comparison", () => {

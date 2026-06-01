@@ -22,6 +22,7 @@ import {
 } from "@/lib/supabase/client";
 import type {
   ApartmentBasicInfoRow,
+  ApartmentBuildingInfoRow,
   ApartmentRowData,
   ApartmentTransactionRow,
   CommuteTimeRow,
@@ -34,6 +35,9 @@ export function CompareClient() {
   const [apartments, setApartments] = useState<ApartmentRowData[]>([]);
   const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
   const [basicInfos, setBasicInfos] = useState<ApartmentBasicInfoRow[]>([]);
+  const [buildingInfos, setBuildingInfos] = useState<ApartmentBuildingInfoRow[]>(
+    [],
+  );
   const [commuteTimes, setCommuteTimes] = useState<CommuteTimeRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -70,29 +74,36 @@ export function CompareClient() {
     if (apartmentIds.length === 0) {
       setTransactions([]);
       setBasicInfos([]);
+      setBuildingInfos([]);
       setCommuteTimes([]);
       setIsLoading(false);
       return;
     }
 
-    const [transactionResult, basicInfoResult, commuteResult] = await Promise.all([
-      supabase
-        .from("apartment_transactions")
-        .select("*")
-        .in("apartment_id", apartmentIds)
-        .order("deal_date", { ascending: false })
-        .limit(2000),
-      supabase
-        .from("apartment_basic_info")
-        .select("*")
-        .in("apartment_id", apartmentIds)
-        .order("fetched_at", { ascending: false }),
-      supabase
-        .from("commute_times")
-        .select("*")
-        .in("apartment_id", apartmentIds)
-        .order("fetched_at", { ascending: false }),
-    ]);
+    const [transactionResult, basicInfoResult, buildingInfoResult, commuteResult] =
+      await Promise.all([
+        supabase
+          .from("apartment_transactions")
+          .select("*")
+          .in("apartment_id", apartmentIds)
+          .order("deal_date", { ascending: false })
+          .limit(2000),
+        supabase
+          .from("apartment_basic_info")
+          .select("*")
+          .in("apartment_id", apartmentIds)
+          .order("fetched_at", { ascending: false }),
+        supabase
+          .from("apartment_building_info")
+          .select("*")
+          .in("apartment_id", apartmentIds)
+          .order("fetched_at", { ascending: false }),
+        supabase
+          .from("commute_times")
+          .select("*")
+          .in("apartment_id", apartmentIds)
+          .order("fetched_at", { ascending: false }),
+      ]);
     const messages: string[] = [];
 
     if (transactionResult.error) {
@@ -112,6 +123,18 @@ export function CompareClient() {
       setBasicInfos([]);
     } else {
       setBasicInfos((basicInfoResult.data ?? []) as ApartmentBasicInfoRow[]);
+    }
+
+    if (buildingInfoResult.error) {
+      if (!isMissingTableError(buildingInfoResult.error)) {
+        messages.push(buildingInfoResult.error.message);
+      }
+
+      setBuildingInfos([]);
+    } else {
+      setBuildingInfos(
+        (buildingInfoResult.data ?? []) as ApartmentBuildingInfoRow[],
+      );
     }
 
     if (commuteResult.error) {
@@ -165,6 +188,7 @@ export function CompareClient() {
         setApartments([]);
         setTransactions([]);
         setBasicInfos([]);
+        setBuildingInfos([]);
         setCommuteTimes([]);
       }
     });
@@ -182,8 +206,9 @@ export function CompareClient() {
         transactions,
         basicInfos,
         commuteTimes,
+        buildingInfos,
       ),
-    [apartments, basicInfos, commuteTimes, transactions],
+    [apartments, basicInfos, buildingInfos, commuteTimes, transactions],
   );
   const filteredRows = useMemo(
     () =>
@@ -488,6 +513,14 @@ function ComparisonMatrix({
                 value={formatParkingPerHousehold(row.parkingPerHousehold)}
               />
               <MiniMetric
+                label="용적률"
+                value={formatRatioPercent(row.floorAreaRatio)}
+              />
+              <MiniMetric
+                label="건폐율"
+                value={formatRatioPercent(row.buildingCoverageRatio)}
+              />
+              <MiniMetric
                 label="여의도"
                 value={formatDestinationAccess(
                   row.commuteToYeouido,
@@ -531,6 +564,10 @@ function BasicInfoSummary({
       <p className="text-xs text-slate-500">
         주차/세대 {formatParkingPerHousehold(row.parkingPerHousehold)} ·{" "}
         경과 {formatBuildingAge(row.buildingAgeYears)}
+      </p>
+      <p className="text-xs text-slate-500">
+        용적률 {formatRatioPercent(row.floorAreaRatio)} · 건폐율{" "}
+        {formatRatioPercent(row.buildingCoverageRatio)}
       </p>
       <p className="text-xs text-slate-500">
         사용승인 {row.approvalDate ? formatDate(row.approvalDate) : "-"}
@@ -717,6 +754,12 @@ function formatParkingPerHousehold(value: number | null) {
         maximumFractionDigits: 2,
         minimumFractionDigits: 2,
       })}대`
+    : "-";
+}
+
+function formatRatioPercent(value: number | null) {
+  return value !== null
+    ? `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`
     : "-";
 }
 

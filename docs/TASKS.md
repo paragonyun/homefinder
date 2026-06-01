@@ -71,6 +71,9 @@
 - [x] TMAP 기반 대중교통/자동차 접근성 자동 조회 route 작성
 - [x] 대중교통 상세 경로 timeline UI 작성
 - [ ] Vercel에 `TMAP_API_KEY` 등록
+- [x] `apartment_building_info` migration 작성
+- [x] 상세/비교/대시보드에 용적률, 건폐율, 세대당 주차수 표시
+- [ ] Supabase에 `20260601000100_apartment_building_info.sql` 적용
 
 ## 운영 적용 메모
 
@@ -86,6 +89,7 @@
 - [x] Supabase에 `20260529000100_commute_times.sql` 적용 확인
 - [x] Vercel에 `KAPT_API_KEY` 등록
 - [ ] Vercel에 `TMAP_API_KEY` 등록
+- [ ] Supabase에 `20260601000100_apartment_building_info.sql` 적용
 - [x] Supabase 운영자 계정 `app_metadata.role = admin` 설정 확인
 
 ## 금지/주의
@@ -104,6 +108,6 @@
 
 ## 다음 개선 후보
 
-- [ ] 건축물대장 기반 `apartment_building_info` 파이프라인 구현
-  - 표시 후보: 용적률, 건폐율, 대지면적, 건축면적, 연면적, 최고층/최저층
-  - K-apt 기본정보만으로는 용적률·건폐율이 안정적으로 나오지 않으므로 별도 공식 데이터 소스 확인 필요
+- [ ] 건축물대장 기반 `apartment_building_info` 자동 조회 파이프라인 구현
+  - 현재는 테이블과 화면 표시를 먼저 구현했습니다.
+  - 자동 조회는 주소/지번 매칭 정확도 검증 뒤 별도 공식 데이터 소스로 연결합니다.

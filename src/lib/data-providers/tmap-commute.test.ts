@@ -6,6 +6,17 @@ import {
 } from "./tmap-commute";
 
 describe("parseTmapTransitRoute", () => {
+  it("throws explicit TMAP result errors returned with HTTP 200", () => {
+    expect(() =>
+      parseTmapTransitRoute({
+        result: {
+          message: "검색 결과가 없음",
+          status: 14,
+        },
+      }),
+    ).toThrow("TMAP 대중교통 API error 14: 검색 결과가 없음");
+  });
+
   it("normalizes walking, subway, transfer, fare, and stop details", () => {
     const result = parseTmapTransitRoute({
       metaData: {

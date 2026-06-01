@@ -64,6 +64,8 @@ export async function fetchTmapTransitRoute({
 }
 
 export function parseTmapTransitRoute(body: unknown): TmapCommuteResult {
+  throwIfTmapResultError("대중교통", body);
+
   const plan = getRecord(getRecord(body)?.metaData)?.plan;
   const itineraries = getArray(getRecord(plan)?.itineraries);
   const itinerary = itineraries
@@ -151,6 +153,8 @@ export async function fetchTmapDrivingRoute({
 }
 
 export function parseTmapDrivingRoute(body: unknown): TmapCommuteResult {
+  throwIfTmapResultError("자동차", body);
+
   const features = getArray(getRecord(body)?.features).map(getRecord).filter(Boolean);
   const summary = features
     .map((feature) => getRecord(feature?.properties))
@@ -398,12 +402,45 @@ function formatTmapError(
   body: unknown,
 ) {
   const message =
+    readTmapResultError(body)?.message ??
     readString(getRecord(getRecord(body)?.error)?.message) ??
     readString(getRecord(body)?.message);
 
   return `TMAP ${label} API request failed with ${status}${
     message ? `: ${message}` : ""
   }`;
+}
+
+function throwIfTmapResultError(label: string, body: unknown) {
+  const error = readTmapResultError(body);
+
+  if (!error) {
+    return;
+  }
+
+  const status = error.status !== null ? ` ${error.status}` : "";
+
+  throw new Error(`TMAP ${label} API error${status}: ${error.message}`);
+}
+
+function readTmapResultError(body: unknown) {
+  const result = getRecord(getRecord(body)?.result);
+
+  if (!result) {
+    return null;
+  }
+
+  const status = readNumber(result.status);
+  const message = readString(result.message);
+
+  if (status === null && !message) {
+    return null;
+  }
+
+  return {
+    status,
+    message: message ?? "Unknown error",
+  };
 }
 
 function secondsToMinutes(seconds: number) {

@@ -12,6 +12,10 @@ import {
   type CommuteAccessSummary,
   type CommuteSummary,
 } from "@/lib/services/commute-summary";
+import {
+  formatCommuteRefreshMessage,
+  type CommuteRefreshResult,
+} from "@/lib/services/commute-refresh-result";
 import type { CommuteDestinationKey } from "@/types/commute";
 import {
   buildLinearTicks,
@@ -78,18 +82,6 @@ type SchoolSyncResult = {
   districtName?: string | null;
   fetchedAt?: string;
   message?: string;
-};
-
-type CommuteRefreshResult = {
-  error?: string;
-  savedCount?: number;
-  errors?: Array<{
-    destinationKey: string;
-    transportType: string;
-    error: string;
-  }>;
-  searchDttm?: string;
-  expiresAt?: string;
 };
 
 type KaptCodeCandidate = {
@@ -2109,19 +2101,6 @@ function formatSchoolSyncMessage(result: SchoolSyncResult) {
   )}곳을 반영했고, ${accessCount.toLocaleString(
     "ko-KR",
   )}건의 단지-학교 연결을 저장했습니다.`;
-}
-
-function formatCommuteRefreshMessage(result: CommuteRefreshResult) {
-  const savedCount = result.savedCount ?? 0;
-  const failedCount = result.errors?.length ?? 0;
-  const baseMessage = `접근성 ${savedCount}건을 TMAP 기준으로 조회했습니다.`;
-  const expireMessage = result.expiresAt
-    ? `자동 조회값은 ${formatDate(result.expiresAt)}까지 표시됩니다.`
-    : "자동 조회값은 24시간 동안 표시됩니다.";
-
-  return failedCount > 0
-    ? `${baseMessage} 일부 실패 ${failedCount}건이 있습니다. ${expireMessage}`
-    : `${baseMessage} ${expireMessage}`;
 }
 
 function getErrorMessage(error: unknown) {

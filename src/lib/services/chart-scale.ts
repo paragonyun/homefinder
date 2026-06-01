@@ -53,6 +53,40 @@ export function getVisibleMonthLabels(months: string[], maxLabelCount = 6) {
   );
 }
 
+export function getSvgTooltipLayout({
+  chartHeight,
+  chartWidth,
+  pointX,
+  pointY,
+  tooltipHeight,
+  tooltipWidth,
+}: {
+  chartHeight: number;
+  chartWidth: number;
+  pointX: number;
+  pointY: number;
+  tooltipHeight: number;
+  tooltipWidth: number;
+}) {
+  const margin = 12;
+  const gap = 12;
+  const y =
+    pointY - tooltipHeight - gap >= margin
+      ? pointY - tooltipHeight - gap
+      : Math.min(pointY + gap + 2, chartHeight - tooltipHeight - margin);
+  const x = Math.min(
+    Math.max(pointX - tooltipWidth / 2, margin),
+    chartWidth - tooltipWidth - margin,
+  );
+
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    textX: Math.round(x + tooltipWidth / 2),
+    textY: Math.round(y + 16),
+  };
+}
+
 function getNiceStep(value: number) {
   const exponent = Math.floor(Math.log10(value));
   const base = 10 ** exponent;

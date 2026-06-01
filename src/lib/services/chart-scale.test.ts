@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildLinearTicks, getVisibleMonthLabels } from "./chart-scale";
+import {
+  buildLinearTicks,
+  getSvgTooltipLayout,
+  getVisibleMonthLabels,
+} from "./chart-scale";
 
 describe("buildLinearTicks", () => {
   it("returns unique readable ticks for a normal price range", () => {
@@ -37,5 +41,43 @@ describe("getVisibleMonthLabels", () => {
         4,
       ),
     ).toEqual(["2025-01", "2025-04", "2025-07", "2025-08"]);
+  });
+});
+
+describe("getSvgTooltipLayout", () => {
+  it("keeps tooltip boxes inside the chart bounds", () => {
+    expect(
+      getSvgTooltipLayout({
+        chartWidth: 920,
+        chartHeight: 360,
+        pointX: 910,
+        pointY: 20,
+        tooltipWidth: 136,
+        tooltipHeight: 42,
+      }),
+    ).toEqual({
+      x: 772,
+      y: 34,
+      textX: 840,
+      textY: 50,
+    });
+  });
+
+  it("places labels above points when there is enough space", () => {
+    expect(
+      getSvgTooltipLayout({
+        chartWidth: 920,
+        chartHeight: 360,
+        pointX: 120,
+        pointY: 180,
+        tooltipWidth: 136,
+        tooltipHeight: 42,
+      }),
+    ).toEqual({
+      x: 52,
+      y: 126,
+      textX: 120,
+      textY: 142,
+    });
   });
 });

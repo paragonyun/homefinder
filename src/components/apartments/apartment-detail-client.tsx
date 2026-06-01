@@ -24,6 +24,7 @@ import {
 import type { CommuteDestinationKey } from "@/types/commute";
 import {
   buildLinearTicks,
+  getSvgTooltipLayout,
   getVisibleMonthLabels,
 } from "@/lib/services/chart-scale";
 import {
@@ -836,7 +837,7 @@ export function ApartmentDetailClient({
             </button>
           ) : null}
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid items-start gap-3 md:grid-cols-2">
           <CommuteAccessCard
             title="여의도역"
             access={commuteAccessSummary?.yeouido_station ?? null}
@@ -1328,7 +1329,7 @@ function CommuteAccessCard({
           {transit?.isExpired || driving?.isExpired ? "갱신 필요" : "저장됨"}
         </span>
       </div>
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px]">
+      <div className="grid gap-3">
         <TransitRouteOverview commute={transit} />
         <CommuteModeSummary label="자동차" commute={driving} />
       </div>
@@ -2043,23 +2044,72 @@ function PriceTrendLineChart({
                 ) : null}
                 {line.points.map((point, pointIndex) => {
                   const isLatest = pointIndex === line.points.length - 1;
+                  const pointX = getX(point.month);
+                  const pointY = getY(point.averagePriceKrw);
+                  const tooltip = getSvgTooltipLayout({
+                    chartWidth: width,
+                    chartHeight: height,
+                    pointX,
+                    pointY,
+                    tooltipWidth: 148,
+                    tooltipHeight: 44,
+                  });
+                  const tooltipLabel = `${formatKrw(
+                    point.averagePriceKrw,
+                  )} · ${point.transactionCount}건`;
 
                   return (
-                  <circle
-                    key={`${line.areaBucket}-${point.month}`}
-                    cx={getX(point.month)}
-                    cy={getY(point.averagePriceKrw)}
-                    fill="#ffffff"
-                    r={isLatest ? "6" : "4"}
-                    stroke={color}
-                    strokeWidth="3"
-                  >
-                    <title>
-                      {point.month} {line.areaBucket}㎡ 평균{" "}
-                      {formatKrw(point.averagePriceKrw)} ({point.transactionCount}
-                      건)
-                    </title>
-                  </circle>
+                    <g
+                      key={`${line.areaBucket}-${point.month}`}
+                      aria-label={`${point.month} ${line.areaBucket}㎡대 평균 ${tooltipLabel}`}
+                      className="group cursor-pointer outline-none"
+                      tabIndex={0}
+                    >
+                      <circle
+                        cx={pointX}
+                        cy={pointY}
+                        fill="transparent"
+                        r="16"
+                      />
+                      <circle
+                        cx={pointX}
+                        cy={pointY}
+                        fill="#ffffff"
+                        pointerEvents="none"
+                        r={isLatest ? "6" : "4"}
+                        stroke={color}
+                        strokeWidth="3"
+                      />
+                      <g className="pointer-events-none opacity-0 transition-opacity group-focus:opacity-100 group-hover:opacity-100">
+                        <rect
+                          x={tooltip.x}
+                          y={tooltip.y}
+                          width="148"
+                          height="44"
+                          rx="8"
+                          fill="#0f172a"
+                        />
+                        <text
+                          x={tooltip.textX}
+                          y={tooltip.textY}
+                          fill="#ffffff"
+                          fontSize="12"
+                          fontWeight="700"
+                          textAnchor="middle"
+                        >
+                          {tooltipLabel}
+                        </text>
+                        <text
+                          x={tooltip.textX}
+                          y={tooltip.textY + 17}
+                          fill="#cbd5e1"
+                          fontSize="10"
+                          textAnchor="middle"
+                        >
+                          {point.month} · {line.areaBucket}㎡대 평균
+                        </text>
+                      </g>
+                    </g>
                   );
                 })}
               </g>

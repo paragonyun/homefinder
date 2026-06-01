@@ -61,6 +61,7 @@ export async function fetchBuildingRegisterInfo({
     BUILDING_REGISTER_TITLE_ENDPOINT,
   ];
   let firstEmptyResult: BuildingRegisterFetchResult | null = null;
+  let bestResult: BuildingRegisterFetchResult | null = null;
   let lastError: Error | null = null;
 
   for (const endpoint of endpoints) {
@@ -72,7 +73,17 @@ export async function fetchBuildingRegisterInfo({
       });
 
       if (result.selected) {
-        return result;
+        if (
+          !bestResult?.selected ||
+          scoreBuildingRegisterInfo(result.selected) >
+            scoreBuildingRegisterInfo(bestResult.selected)
+        ) {
+          bestResult = result;
+        }
+
+        if (hasDensityMetrics(result.selected)) {
+          return result;
+        }
       }
 
       firstEmptyResult ??= result;
@@ -82,7 +93,11 @@ export async function fetchBuildingRegisterInfo({
   }
 
   if (firstEmptyResult) {
-    return firstEmptyResult;
+    return bestResult ?? firstEmptyResult;
+  }
+
+  if (bestResult) {
+    return bestResult;
   }
 
   throw lastError ?? new Error("Building register API request failed.");
@@ -211,11 +226,15 @@ function normalizeBuildingRegisterRecord(
     buildingName: cleanText(readFirst(record, ["bldNm", "buildingName"])),
     legalAddress: cleanText(readFirst(record, ["platPlc", "legalAddress"])),
     roadAddress: cleanText(readFirst(record, ["newPlatPlc", "roadAddress"])),
-    landAreaM2: parseNumber(readFirst(record, ["platArea", "landAreaM2"])),
-    buildingAreaM2: parseNumber(readFirst(record, ["archArea", "buildingAreaM2"])),
-    grossFloorAreaM2: parseNumber(readFirst(record, ["totArea", "grossFloorAreaM2"])),
-    floorAreaRatio: parseNumber(readFirst(record, ["vlRat", "floorAreaRatio"])),
-    buildingCoverageRatio: parseNumber(
+    landAreaM2: parsePositiveNumber(readFirst(record, ["platArea", "landAreaM2"])),
+    buildingAreaM2: parsePositiveNumber(
+      readFirst(record, ["archArea", "buildingAreaM2"]),
+    ),
+    grossFloorAreaM2: parsePositiveNumber(
+      readFirst(record, ["totArea", "grossFloorAreaM2"]),
+    ),
+    floorAreaRatio: parsePositiveNumber(readFirst(record, ["vlRat", "floorAreaRatio"])),
+    buildingCoverageRatio: parsePositiveNumber(
       readFirst(record, ["bcRat", "buildingCoverageRatio"]),
     ),
     mainUse: cleanText(readFirst(record, ["mainPurpsCdNm", "mainUse"])),
@@ -226,15 +245,31 @@ function normalizeBuildingRegisterRecord(
 }
 
 function scoreBuildingRegisterInfo(info: BuildingRegisterInfo): number {
-  return [
-    info.floorAreaRatio,
-    info.buildingCoverageRatio,
-    info.landAreaM2,
-    info.buildingAreaM2,
-    info.grossFloorAreaM2,
-    info.highestFloor,
-    info.lowestFloor,
-  ].reduce<number>((score, value) => score + (value !== null ? 1 : 0), 0);
+  return (
+    scorePositiveMetric(info.floorAreaRatio, 5) +
+    scorePositiveMetric(info.buildingCoverageRatio, 5) +
+    scorePositiveMetric(info.landAreaM2, 4) +
+    scorePositiveMetric(info.buildingAreaM2, 3) +
+    scorePositiveMetric(info.grossFloorAreaM2, 1) +
+    scorePositiveMetric(info.highestFloor, 1) +
+    (info.lowestFloor !== null ? 1 : 0)
+  );
+}
+
+function hasDensityMetrics(info: BuildingRegisterInfo) {
+  return (
+    isPositiveNumber(info.floorAreaRatio) &&
+    isPositiveNumber(info.buildingCoverageRatio) &&
+    isPositiveNumber(info.landAreaM2)
+  );
+}
+
+function scorePositiveMetric(value: number | null, weight: number) {
+  return isPositiveNumber(value) ? weight : 0;
+}
+
+function isPositiveNumber(value: number | null) {
+  return value !== null && value > 0;
 }
 
 function parseResponseBody(response: unknown) {
@@ -372,6 +407,12 @@ function parseNumber(value: unknown) {
   const parsed = text ? Number(text) : Number.NaN;
 
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parsePositiveNumber(value: unknown) {
+  const parsed = parseNumber(value);
+
+  return parsed !== null && parsed > 0 ? parsed : null;
 }
 
 function looksUrlEncoded(value: string) {

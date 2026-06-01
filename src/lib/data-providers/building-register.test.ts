@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBuildingRegisterUrl,
   parseBuildingRegisterResponse,
+  selectBestBuildingRegisterInfo,
 } from "./building-register";
 
 describe("parseBuildingRegisterResponse", () => {
@@ -82,6 +83,36 @@ describe("parseBuildingRegisterResponse", () => {
     });
   });
 
+  it("treats zero area and density fields as missing data", () => {
+    const result = parseBuildingRegisterResponse({
+      response: {
+        header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+        body: {
+          items: {
+            item: {
+              platPlc: "Seoul Gwanak Bongcheon 1000",
+              mainPurpsCdNm: "Apartment",
+              platArea: "0",
+              archArea: "0",
+              totArea: "191207.79",
+              vlRat: "0",
+              bcRat: "0",
+            },
+          },
+          totalCount: "1",
+        },
+      },
+    });
+
+    expect(result.items[0]).toMatchObject({
+      landAreaM2: null,
+      buildingAreaM2: null,
+      grossFloorAreaM2: 191207.79,
+      floorAreaRatio: null,
+      buildingCoverageRatio: null,
+    });
+  });
+
   it("surfaces public data portal API errors", () => {
     expect(() =>
       parseBuildingRegisterResponse({
@@ -93,6 +124,44 @@ describe("parseBuildingRegisterResponse", () => {
         },
       }),
     ).toThrow("Building register API error 30");
+  });
+});
+
+describe("selectBestBuildingRegisterInfo", () => {
+  it("prefers rows with actual density metrics over gross-area-only rows", () => {
+    const selected = selectBestBuildingRegisterInfo([
+      {
+        buildingName: null,
+        legalAddress: "Seoul Gwanak Bongcheon 1000",
+        roadAddress: null,
+        landAreaM2: null,
+        buildingAreaM2: null,
+        grossFloorAreaM2: 191207.79,
+        floorAreaRatio: null,
+        buildingCoverageRatio: null,
+        mainUse: "Apartment",
+        highestFloor: null,
+        lowestFloor: null,
+        structureType: null,
+      },
+      {
+        buildingName: "101",
+        legalAddress: "Seoul Gwanak Bongcheon 1000",
+        roadAddress: null,
+        landAreaM2: 69432,
+        buildingAreaM2: 20105.66,
+        grossFloorAreaM2: 169706.83,
+        floorAreaRatio: 163.58,
+        buildingCoverageRatio: 28.96,
+        mainUse: "Apartment",
+        highestFloor: 25,
+        lowestFloor: 3,
+        structureType: "Reinforced concrete",
+      },
+    ]);
+
+    expect(selected?.floorAreaRatio).toBe(163.58);
+    expect(selected?.buildingCoverageRatio).toBe(28.96);
   });
 });
 

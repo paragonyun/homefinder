@@ -82,6 +82,7 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 - 저장된 K-apt 기본정보 법정주소, K-apt 디렉터리 법정동코드, 실거래가 원천 지번주소를 조합해 `sigunguCd`, `bjdongCd`, `platGbCd`, `bun`, `ji`를 만듭니다.
 - 도로명주소만 있고 지번주소를 찾지 못하면 잘못된 건축물대장 조회를 막기 위해 API를 호출하지 않고 실패 메시지를 반환합니다.
 - 원천 응답은 `raw_api_responses`에 저장하고, 정규화된 용적률/건폐율/면적은 `apartment_building_info`에 저장합니다.
+- 2026-06-01 운영 DB 기준 `apartment_building_info` 1건 저장을 확인했습니다.
 
 ## NEIS 학교기본정보
 
@@ -105,6 +106,7 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 - `schools`에는 학교 기본정보와 주소를 저장하고, `apartment_school_access`에는 단지-학교 연결을 저장합니다.
 - 단지와 학교 좌표가 모두 있는 경우에만 직선거리와 도보 추정 시간을 계산합니다. 좌표가 없으면 화면에 `거리 계산 전`으로 표시합니다.
 - 실제 초등 통학구/중학군 배정은 교육청 기준과 다를 수 있으므로 앱에서는 “가까운 학교 후보”로만 표시합니다.
+- 2026-06-01 운영 DB 기준 NEIS 원천 응답 `raw_api_responses.provider = neis` 1건, `schools` 80건, `apartment_school_access` 80건 저장을 확인했습니다.
 
 ## Kakao Local API
 
@@ -138,7 +140,7 @@ MVP의 데이터 수집은 공식 API와 허용된 경로만 사용합니다. �
 
 - API 키는 기본적으로 `TMAP_API_KEY` 하나로 서버 route에서만 읽습니다.
 - 대중교통과 자동차 키를 분리해야 하면 `TMAP_TRANSIT_API_KEY`, `TMAP_DRIVING_API_KEY`가 `TMAP_API_KEY`보다 우선됩니다.
-- 2026-06-01 기준 운영 키는 자동차 경로 조회는 동작하지만 대중교통 조회에서 권한 오류가 확인됐습니다. 대중교통은 TMAP 대중교통 API 상품 권한이 있는 앱키를 `TMAP_TRANSIT_API_KEY`에 별도로 등록한 뒤 재검증합니다.
+- 2026-06-01 기준 기존 `TMAP_API_KEY`에 대중교통 API 권한을 확장했고, 여의도역/강남역 대중교통과 자동차 경로 저장을 운영 DB에서 확인했습니다.
 - 기준 시각은 다음 평일 오전 7시 30분(Asia/Seoul)입니다.
 - 단지 좌표가 없으면 TMAP 지오코딩으로 주소를 좌표화하고 `apartments.lat/lng`에 저장합니다.
 - 여의도역/강남역 각각 대중교통(`transit`)과 자동차(`driving`) row를 `commute_times`에 upsert합니다.

@@ -33,7 +33,7 @@
 - [x] 초기 Supabase migration 실제 적용
 - [x] Magic link 제거 및 비밀번호 로그인 전환
 - [x] 동네/단지 CUD 운영자 제한 RLS 추가
-- [ ] 운영자 제한 migration 실제 적용
+- [x] 운영자 제한 migration 실제 적용
 - [x] Supabase 운영자 계정 생성 및 `app_metadata.role = admin` 설정
 
 ## 데이터 연동
@@ -72,13 +72,13 @@
 - [x] 대중교통 상세 경로 timeline UI 작성
 - [x] Vercel에 `TMAP_API_KEY` 등록
 - [x] TMAP 자동차 접근성 운영 조회 검증
-- [ ] Vercel에 대중교통 API 권한이 있는 `TMAP_TRANSIT_API_KEY` 등록
-- [ ] TMAP 대중교통 접근성 운영 조회 검증
+- [x] 기존 TMAP appKey 대중교통 API 권한 확장
+- [x] TMAP 대중교통 접근성 운영 조회 검증
 - [x] `apartment_building_info` migration 작성
 - [x] 상세/비교/대시보드에 용적률, 건폐율, 세대당 주차수 표시
 - [x] Supabase에 `20260601000100_apartment_building_info.sql` 적용
 - [x] 건축물대장 기반 `apartment_building_info` 자동 조회 route 작성
-- [ ] 공공데이터포털 건축HUB 건축물대장정보 서비스 활용신청/운영 호출 검증
+- [x] 공공데이터포털 건축HUB 건축물대장정보 서비스 활용신청/운영 호출 검증
 
 - [x] `schools`, `apartment_school_access` migration 작성
 - [x] NEIS 학교기본정보 parser 테스트
@@ -86,7 +86,7 @@
 - [x] 단지 상세 화면 학군/학교 섹션 표시
 - [x] Supabase에 `20260601000200_schools.sql` 적용
 - [x] Vercel에 `NEIS_API_KEY` 등록
-- [ ] 실제 NEIS API 응답으로 운영 학군 동기화 검증
+- [x] 실제 NEIS API 응답으로 운영 학군 동기화 검증
 
 ## 운영 적용 메모
 
@@ -95,14 +95,14 @@
 - [x] Vercel에 Supabase 공개 환경변수 등록
 - [x] Vercel에 `MOLIT_API_KEY` 등록
 - [x] 초기 Supabase migration 실제 적용
-- [ ] Supabase에 `20260519000100_admin_only_core_mutations.sql` 적용 확인
+- [x] Supabase에 `20260519000100_admin_only_core_mutations.sql` 적용 확인
 - [x] Supabase에 `20260519000200_apartment_transactions.sql` 적용 확인
 - [x] Supabase에 `20260520000100_apartment_aliases.sql` 적용 확인
 - [x] Supabase에 `20260520000200_apartment_basic_info.sql` 적용
 - [x] Supabase에 `20260529000100_commute_times.sql` 적용 확인
 - [x] Vercel에 `KAPT_API_KEY` 등록
 - [x] Vercel에 `TMAP_API_KEY` 등록
-- [ ] Vercel에 대중교통 API 권한이 있는 `TMAP_TRANSIT_API_KEY` 등록
+- [x] 기존 TMAP appKey 대중교통 API 권한 확장
 - [x] Supabase에 `20260601000100_apartment_building_info.sql` 적용
 - [x] Supabase에 `20260601000200_schools.sql` 적용
 - [x] Vercel에 `NEIS_API_KEY` 등록
@@ -123,14 +123,14 @@
 - [x] `kapt_code_directory` 서울 단지 디렉터리 seed 적용
 - [x] Supabase SQL Editor에 `supabase/migrations/20260601000100_apartment_building_info.sql` 적용
 - [x] Supabase SQL Editor에 `supabase/migrations/20260601000200_schools.sql` 적용
-- [ ] TMAP 대중교통 API 상품 권한이 있는 appKey를 발급해 Vercel Production `TMAP_TRANSIT_API_KEY`에 등록하고 redeploy
-- [ ] 공공데이터포털 건축HUB 건축물대장정보 서비스 활용신청 및 운영 조회 성공 확인
-- [ ] 단지 상세에서 학군 정보 불러오기를 실행해 실제 NEIS 응답 저장 확인
+- [x] 기존 TMAP appKey에 대중교통 API 상품 권한 확장
+- [x] 공공데이터포털 건축HUB 건축물대장정보 서비스 활용신청 및 운영 조회 성공 확인
+- [x] 단지 상세에서 학군 정보 불러오기를 실행해 실제 NEIS 응답 저장 확인
 
 ## 다음 개선 후보
 
 - [x] 건축물대장 기반 `apartment_building_info` 자동 조회 파이프라인 구현
   - 주소/지번 기반 건축물대장 조회 route와 화면 표시까지 구현했습니다.
-  - 남은 작업은 실제 공공데이터포털 권한으로 운영 호출을 검증하는 것입니다.
-- [ ] TMAP 대중교통 응답 권한 확보 뒤 여의도역/강남역 대중교통 route 운영 검증
+  - 실제 공공데이터포털 권한으로 운영 호출과 저장까지 확인했습니다.
+- [x] TMAP 대중교통 응답 권한 확보 뒤 여의도역/강남역 대중교통 route 운영 검증
 - [ ] 학군 데이터는 현재 가까운 학교 후보 기준입니다. 실제 통학구/중학군 배정 데이터는 별도 공식 소스 확인 후 확장합니다.

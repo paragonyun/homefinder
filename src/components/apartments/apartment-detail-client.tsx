@@ -16,6 +16,11 @@ import {
   formatCommuteRefreshMessage,
   type CommuteRefreshResult,
 } from "@/lib/services/commute-refresh-result";
+import {
+  buildTransitRouteHeadline,
+  buildTransitRouteSegments,
+  type TransitRouteSegment,
+} from "@/lib/services/commute-route-display";
 import type { CommuteDestinationKey } from "@/types/commute";
 import {
   buildLinearTicks,
@@ -1323,11 +1328,10 @@ function CommuteAccessCard({
           {transit?.isExpired || driving?.isExpired ? "갱신 필요" : "저장됨"}
         </span>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <CommuteModeSummary label="대중교통" commute={transit} />
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_180px]">
+        <TransitRouteOverview commute={transit} />
         <CommuteModeSummary label="자동차" commute={driving} />
       </div>
-      <TransitRouteTimeline commute={transit} />
     </article>
   );
 }
@@ -1432,45 +1436,137 @@ function CommuteModeSummary({
   );
 }
 
-function TransitRouteTimeline({
+function TransitRouteOverview({
   commute,
 }: Readonly<{ commute: CommuteSummary | null }>) {
   if (!commute) {
     return (
-      <p className="rounded-md border border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-500">
-        접근성 자동 조회를 실행하면 도보, 버스, 지하철, 환승 구간이 여기에 표시됩니다.
-      </p>
+      <div className="min-w-0 rounded-md border border-dashed border-slate-300 bg-white p-4">
+        <p className="text-xs font-semibold text-slate-500">대중교통</p>
+        <p className="mt-2 text-xl font-semibold text-slate-950">-</p>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          접근성 자동 조회를 실행하면 도보, 버스, 지하철, 환승 구간이 표시됩니다.
+        </p>
+      </div>
     );
   }
 
-  if (commute.routeSteps.length === 0) {
-    return (
-      <p className="rounded-md border border-slate-200 bg-white px-3 py-3 text-sm text-slate-500">
-        상세 경로가 없는 수동 입력값입니다.
-      </p>
-    );
+  const segments = buildTransitRouteSegments(commute.routeSteps);
+  const headline = buildTransitRouteHeadline(commute.routeSteps);
+
+  return (
+    <div className="min-w-0 rounded-md border border-slate-200 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-slate-500">대중교통</p>
+          <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
+            <p className="text-3xl font-semibold tracking-normal text-slate-950">
+              {formatCommuteMetric(commute)}
+            </p>
+            <p className="pb-1 text-xs leading-5 text-slate-500">
+              {formatCommuteSubtext(commute)}
+            </p>
+          </div>
+        </div>
+        {commute.isExpired ? (
+          <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+            만료
+          </span>
+        ) : null}
+      </div>
+      {commute.routeSteps.length > 0 ? (
+        <>
+          <p className="mt-3 truncate text-sm font-semibold text-slate-950">
+            {headline}
+          </p>
+          <TransitRouteBar segments={segments} />
+          <TransitRouteStepList steps={commute.routeSteps} />
+        </>
+      ) : (
+        <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
+          상세 경로가 없는 수동 입력값입니다.
+        </p>
+      )}
+      {commute.fetchedAt ? (
+        <p className="mt-3 text-[11px] text-slate-400">
+          조회 {formatDate(commute.fetchedAt)}
+          {commute.expiresAt ? ` · 만료 ${formatDate(commute.expiresAt)}` : ""}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function TransitRouteBar({
+  segments,
+}: Readonly<{ segments: TransitRouteSegment[] }>) {
+  if (segments.length === 0) {
+    return null;
   }
 
   return (
-    <ol className="grid min-w-0 gap-2">
-      {commute.routeSteps.map((step, index) => (
+    <div className="mt-3 flex h-9 min-w-0 overflow-hidden rounded-full bg-slate-100">
+      {segments.map((segment, index) => (
+        <div
+          key={`${segment.mode}-${segment.label}-${index}`}
+          className={`flex min-w-8 items-center justify-center px-2 text-[11px] font-semibold ${getRouteSegmentTone(
+            segment.mode,
+          )}`}
+          style={{ flexBasis: 0, flexGrow: segment.flexGrow }}
+          title={`${segment.label}${
+            segment.durationMinutes !== null ? ` · ${segment.durationMinutes}분` : ""
+          }`}
+        >
+          <span className="truncate">
+            {segment.durationMinutes !== null
+              ? `${segment.durationMinutes}분`
+              : segment.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TransitRouteStepList({
+  steps,
+}: Readonly<{ steps: CommuteSummary["routeSteps"] }>) {
+  return (
+    <ol className="mt-4 grid min-w-0 rounded-lg bg-slate-50 px-3 py-2">
+      {steps.map((step, index) => (
         <li
           key={`${step.mode}-${index}-${step.title}`}
-          className="flex min-w-0 gap-3 rounded-md border border-slate-200 bg-white p-3"
+          className="grid min-w-0 grid-cols-[28px_minmax(0,1fr)] gap-3"
         >
-          <span
-            className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getRouteStepTone(
-              step.mode,
-            )}`}
-          >
-            {getRouteStepIcon(step.mode)}
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-950">
-              {step.routeName ? `${step.title} · ${step.routeName}` : step.title}
-            </p>
-            <p className="mt-1 text-xs leading-5 text-slate-600">
-              {step.detail ?? "-"}
+          <div className="flex flex-col items-center">
+            <span
+              className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${getRouteStepTone(
+                step.mode,
+              )}`}
+            >
+              {getRouteStepIcon(step.mode)}
+            </span>
+            {index < steps.length - 1 ? (
+              <span className="mt-1 h-full min-h-5 w-px bg-slate-200" />
+            ) : null}
+          </div>
+          <div className={`min-w-0 ${index < steps.length - 1 ? "pb-4" : "pb-1"}`}>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <p className="break-keep text-sm font-semibold text-slate-950">
+                {step.title}
+              </p>
+              {step.routeName ? (
+                <span
+                  className={`max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-semibold ${getRouteNameTone(
+                    step.mode,
+                  )}`}
+                >
+                  {step.routeName}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 break-words text-xs leading-5 text-slate-600">
+              {step.detail ?? formatRouteStepConnection(step)}
             </p>
             <p className="mt-1 text-[11px] text-slate-400">
               {formatRouteStepMeta(step)}
@@ -1526,6 +1622,10 @@ function formatRouteStepMeta(step: CommuteSummary["routeSteps"][number]) {
     .join(" · ");
 }
 
+function formatRouteStepConnection(step: CommuteSummary["routeSteps"][number]) {
+  return [step.startName, step.endName].filter(Boolean).join(" → ") || "-";
+}
+
 function formatMeters(value: number) {
   return value >= 1000
     ? `${(value / 1000).toLocaleString("ko-KR", {
@@ -1552,6 +1652,42 @@ function getRouteStepTone(mode: CommuteSummary["routeSteps"][number]["mode"]) {
   }
 
   return "bg-slate-50 text-slate-600";
+}
+
+function getRouteSegmentTone(mode: CommuteSummary["routeSteps"][number]["mode"]) {
+  if (mode === "bus") {
+    return "bg-blue-700 text-white";
+  }
+
+  if (mode === "subway") {
+    return "bg-amber-500 text-white";
+  }
+
+  if (mode === "transfer") {
+    return "bg-rose-500 text-white";
+  }
+
+  if (mode === "train") {
+    return "bg-indigo-600 text-white";
+  }
+
+  return "bg-slate-200 text-slate-700";
+}
+
+function getRouteNameTone(mode: CommuteSummary["routeSteps"][number]["mode"]) {
+  if (mode === "bus") {
+    return "bg-blue-50 text-blue-700";
+  }
+
+  if (mode === "subway") {
+    return "bg-amber-50 text-amber-800";
+  }
+
+  if (mode === "train") {
+    return "bg-indigo-50 text-indigo-700";
+  }
+
+  return "bg-slate-100 text-slate-700";
 }
 
 function getRouteStepIcon(mode: CommuteSummary["routeSteps"][number]["mode"]) {

@@ -28,7 +28,14 @@ export function filterComparisonRows(
   return rows.filter((row) => {
     const matchesQuery =
       query.length === 0 ||
-      [row.name, row.address, row.memo, row.lawdCd]
+      [
+        row.name,
+        row.address,
+        row.memo,
+        row.lawdCd,
+        row.fieldNoteConclusion,
+        row.fieldNoteRecheck,
+      ]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(query));
     const matchesStatus =

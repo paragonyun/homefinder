@@ -28,6 +28,11 @@ const rows: ApartmentComparisonRow[] = [
     buildingAgeYears: 27,
     basicInfoFetchedAt: "2026-05-21T00:00:00Z",
     buildingInfoFetchedAt: "2026-06-01T00:00:00Z",
+    fieldNoteDate: "2026-06-01",
+    fieldNoteRating: 4,
+    fieldNoteConclusion: "관심 유지",
+    fieldNoteRecheck: "야간 소음 재확인",
+    fieldNoteUpdatedAt: "2026-06-01T10:00:00Z",
     commuteToYeouido: {
       destinationKey: "yeouido_station",
       destinationName: "여의도역",
@@ -72,6 +77,11 @@ const rows: ApartmentComparisonRow[] = [
     buildingAgeYears: null,
     basicInfoFetchedAt: null,
     buildingInfoFetchedAt: null,
+    fieldNoteDate: null,
+    fieldNoteRating: null,
+    fieldNoteConclusion: null,
+    fieldNoteRecheck: null,
+    fieldNoteUpdatedAt: null,
     commuteToYeouido: null,
     commuteToGangnam: null,
     driveToYeouido: null,
@@ -114,6 +124,14 @@ describe("comparison view helpers", () => {
         data: "missing-commute",
       }).map((row) => row.id),
     ).toEqual([]);
+
+    expect(
+      filterComparisonRows(rows, {
+        query: "야간",
+        status: "all",
+        data: "all",
+      }).map((row) => row.id),
+    ).toEqual(["a"]);
   });
 
   it("counts data completeness metrics", () => {

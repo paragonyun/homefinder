@@ -71,6 +71,11 @@ describe("buildApartmentComparisonRows", () => {
         buildingAgeYears: null,
         basicInfoFetchedAt: null,
         buildingInfoFetchedAt: null,
+        fieldNoteDate: null,
+        fieldNoteRating: null,
+        fieldNoteConclusion: null,
+        fieldNoteRecheck: null,
+        fieldNoteUpdatedAt: null,
         commuteToYeouido: null,
         commuteToGangnam: null,
         driveToYeouido: null,
@@ -106,6 +111,11 @@ describe("buildApartmentComparisonRows", () => {
         buildingAgeYears: null,
         basicInfoFetchedAt: null,
         buildingInfoFetchedAt: null,
+        fieldNoteDate: null,
+        fieldNoteRating: null,
+        fieldNoteConclusion: null,
+        fieldNoteRecheck: null,
+        fieldNoteUpdatedAt: null,
         commuteToYeouido: null,
         commuteToGangnam: null,
         driveToYeouido: null,
@@ -279,6 +289,62 @@ describe("buildApartmentComparisonRows", () => {
       destinationName: "강남역",
       durationMinutes: 35,
       transportType: "driving",
+    });
+  });
+
+  it("merges the latest field note summary into comparison rows", () => {
+    const rows = buildApartmentComparisonRows(
+      [
+        {
+          id: "apt-1",
+          name: "관악드림타운",
+          display_name: null,
+          address: null,
+          lawd_cd: null,
+          status: "interested",
+          memo: null,
+        },
+      ],
+      [],
+      [],
+      [],
+      [],
+      [
+        {
+          apartment_id: "apt-1",
+          visit_date: "2026-05-30",
+          overall_rating: 3,
+          revisit_intention: "보류",
+          overall_memo: "주차 재확인",
+          bad_points: null,
+          parking_note: null,
+          noise_note: null,
+          slope_note: null,
+          created_at: "2026-05-30T10:00:00.000Z",
+          updated_at: "2026-05-30T10:00:00.000Z",
+        },
+        {
+          apartment_id: "apt-1",
+          visit_date: "2026-06-02",
+          overall_rating: 4,
+          revisit_intention: "관심 유지",
+          overall_memo: "비 오는 날 경사 체감 다시 확인",
+          bad_points: null,
+          parking_note: null,
+          noise_note: null,
+          slope_note: null,
+          created_at: "2026-06-02T10:00:00.000Z",
+          updated_at: "2026-06-02T11:00:00.000Z",
+        },
+      ],
+    );
+
+    expect(rows[0]).toMatchObject({
+      fieldNoteDate: "2026-06-02",
+      fieldNoteRating: 4,
+      fieldNoteConclusion: "관심 유지",
+      fieldNoteRecheck: "비 오는 날 경사 체감 다시 확인",
+      fieldNoteUpdatedAt: "2026-06-02T11:00:00.000Z",
     });
   });
 });

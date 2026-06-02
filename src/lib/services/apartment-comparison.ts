@@ -8,6 +8,11 @@ import {
   summarizeApartmentPrices,
   type PriceSummaryTransaction,
 } from "./price-summary";
+import {
+  buildLatestFieldNoteSummary,
+  getLatestFieldNoteByApartmentId,
+  type FieldNoteSummaryInput,
+} from "./field-note-summary";
 
 export type ComparisonApartment = {
   id: string;
@@ -41,6 +46,8 @@ export type ComparisonBuildingInfo = {
 
 export type ComparisonCommuteTime = CommuteTimeLike;
 
+export type ComparisonFieldNote = FieldNoteSummaryInput;
+
 export type ApartmentComparisonRow = {
   id: string;
   name: string;
@@ -62,6 +69,11 @@ export type ApartmentComparisonRow = {
   buildingAgeYears: number | null;
   basicInfoFetchedAt: string | null;
   buildingInfoFetchedAt: string | null;
+  fieldNoteDate: string | null;
+  fieldNoteRating: number | null;
+  fieldNoteConclusion: string | null;
+  fieldNoteRecheck: string | null;
+  fieldNoteUpdatedAt: string | null;
   commuteToYeouido: CommuteSummary | null;
   commuteToGangnam: CommuteSummary | null;
   driveToYeouido: CommuteSummary | null;
@@ -81,10 +93,13 @@ export function buildApartmentComparisonRows(
   basicInfos: ComparisonBasicInfo[] = [],
   commuteTimes: ComparisonCommuteTime[] = [],
   buildingInfos: ComparisonBuildingInfo[] = [],
+  fieldNotes: ComparisonFieldNote[] = [],
 ): ApartmentComparisonRow[] {
   const latestBasicInfoByApartmentId = getLatestBasicInfoByApartmentId(basicInfos);
   const latestBuildingInfoByApartmentId =
     getLatestBuildingInfoByApartmentId(buildingInfos);
+  const latestFieldNoteByApartmentId =
+    getLatestFieldNoteByApartmentId(fieldNotes);
   const commuteSummaryByApartmentId =
     buildCommuteAccessSummaryByApartment(commuteTimes);
 
@@ -101,6 +116,9 @@ export function buildApartmentComparisonRows(
     const basicInfo = latestBasicInfoByApartmentId.get(apartment.id) ?? null;
     const buildingInfo =
       latestBuildingInfoByApartmentId.get(apartment.id) ?? null;
+    const fieldNoteSummary = buildLatestFieldNoteSummary(
+      latestFieldNoteByApartmentId.get(apartment.id) ?? null,
+    );
     const commuteSummary = commuteSummaryByApartmentId.get(apartment.id) ?? null;
 
     return {
@@ -127,6 +145,11 @@ export function buildApartmentComparisonRows(
       buildingAgeYears: getBuildingAgeYears(basicInfo?.approval_date ?? null),
       basicInfoFetchedAt: basicInfo?.fetched_at ?? null,
       buildingInfoFetchedAt: buildingInfo?.fetched_at ?? null,
+      fieldNoteDate: fieldNoteSummary?.visitDate ?? null,
+      fieldNoteRating: fieldNoteSummary?.overallRating ?? null,
+      fieldNoteConclusion: fieldNoteSummary?.conclusion ?? null,
+      fieldNoteRecheck: fieldNoteSummary?.recheckText ?? null,
+      fieldNoteUpdatedAt: fieldNoteSummary?.updatedAt ?? null,
       commuteToYeouido: commuteSummary?.yeouido_station.transit ?? null,
       commuteToGangnam: commuteSummary?.gangnam_station.transit ?? null,
       driveToYeouido: commuteSummary?.yeouido_station.driving ?? null,

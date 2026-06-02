@@ -26,6 +26,7 @@ import type {
   ApartmentRowData,
   ApartmentTransactionRow,
   CommuteTimeRow,
+  FieldNoteRow,
 } from "@/lib/supabase/table-types";
 import { formatDate } from "@/utils/date";
 import { formatKrw } from "@/utils/format-price";
@@ -39,6 +40,7 @@ export function CompareClient() {
     [],
   );
   const [commuteTimes, setCommuteTimes] = useState<CommuteTimeRow[]>([]);
+  const [fieldNotes, setFieldNotes] = useState<FieldNoteRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -76,12 +78,18 @@ export function CompareClient() {
       setBasicInfos([]);
       setBuildingInfos([]);
       setCommuteTimes([]);
+      setFieldNotes([]);
       setIsLoading(false);
       return;
     }
 
-    const [transactionResult, basicInfoResult, buildingInfoResult, commuteResult] =
-      await Promise.all([
+    const [
+      transactionResult,
+      basicInfoResult,
+      buildingInfoResult,
+      commuteResult,
+      fieldNoteResult,
+    ] = await Promise.all([
         supabase
           .from("apartment_transactions")
           .select("*")
@@ -103,6 +111,12 @@ export function CompareClient() {
           .select("*")
           .in("apartment_id", apartmentIds)
           .order("fetched_at", { ascending: false }),
+        supabase
+          .from("field_notes")
+          .select("*")
+          .in("apartment_id", apartmentIds)
+          .order("visit_date", { ascending: false })
+          .order("updated_at", { ascending: false }),
       ]);
     const messages: string[] = [];
 
@@ -145,6 +159,16 @@ export function CompareClient() {
       setCommuteTimes([]);
     } else {
       setCommuteTimes((commuteResult.data ?? []) as CommuteTimeRow[]);
+    }
+
+    if (fieldNoteResult.error) {
+      if (!isMissingTableError(fieldNoteResult.error)) {
+        messages.push(fieldNoteResult.error.message);
+      }
+
+      setFieldNotes([]);
+    } else {
+      setFieldNotes((fieldNoteResult.data ?? []) as FieldNoteRow[]);
     }
 
     if (messages.length > 0) {
@@ -190,6 +214,7 @@ export function CompareClient() {
         setBasicInfos([]);
         setBuildingInfos([]);
         setCommuteTimes([]);
+        setFieldNotes([]);
       }
     });
 
@@ -207,8 +232,16 @@ export function CompareClient() {
         basicInfos,
         commuteTimes,
         buildingInfos,
+        fieldNotes,
       ),
-    [apartments, basicInfos, buildingInfos, commuteTimes, transactions],
+    [
+      apartments,
+      basicInfos,
+      buildingInfos,
+      commuteTimes,
+      fieldNotes,
+      transactions,
+    ],
   );
   const filteredRows = useMemo(
     () =>
@@ -370,7 +403,7 @@ function ComparisonMatrix({
   return (
     <>
       <div className="hidden overflow-x-auto lg:block">
-        <table className="w-full min-w-[1180px] text-left">
+        <table className="w-full min-w-[1300px] text-left">
           <thead className="sticky top-[74px] z-10 bg-slate-50 text-xs uppercase tracking-[0.08em] text-slate-500">
           <tr>
             <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3 font-semibold">
@@ -381,6 +414,7 @@ function ComparisonMatrix({
             <th className="px-4 py-3 font-semibold">평형대 요약</th>
             <th className="px-4 py-3 font-semibold">K-apt 기본정보</th>
             <th className="px-4 py-3 font-semibold">접근성</th>
+            <th className="px-4 py-3 font-semibold">임장 판단</th>
             <th className="px-4 py-3 font-semibold">데이터 상태</th>
           </tr>
         </thead>
@@ -449,6 +483,9 @@ function ComparisonMatrix({
               </td>
               <td className="px-4 py-4 align-top text-sm text-slate-700">
                 <CommuteSummaryView row={row} />
+              </td>
+              <td className="px-4 py-4 align-top text-sm text-slate-700">
+                <FieldNoteSummaryView row={row} />
               </td>
               <td className="px-4 py-4 align-top text-sm leading-6 text-slate-700">
                 <DataQuality row={row} />
@@ -534,6 +571,7 @@ function ComparisonMatrix({
                   row.driveToGangnam,
                 )}
               />
+              <MiniMetric label="임장" value={formatFieldNoteValue(row)} />
             </div>
             <div className="mt-4">
               <DataQuality row={row} />
@@ -607,6 +645,32 @@ function CommuteSummaryView({
   );
 }
 
+function FieldNoteSummaryView({
+  row,
+}: Readonly<{
+  row: ReturnType<typeof buildApartmentComparisonRows>[number];
+}>) {
+  if (!row.fieldNoteDate && !row.fieldNoteRating && !row.fieldNoteConclusion) {
+    return <span className="text-slate-500">임장 기록 없음</span>;
+  }
+
+  return (
+    <div className="grid gap-1">
+      <p className="font-semibold text-slate-950">
+        {row.fieldNoteConclusion ?? "결론 미입력"}
+      </p>
+      <p className="text-xs text-slate-500">
+        {formatFieldNoteValue(row)}
+      </p>
+      {row.fieldNoteRecheck ? (
+        <p className="mt-1 max-w-64 text-xs leading-5 text-slate-600">
+          {row.fieldNoteRecheck}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function DestinationAccessLine({
   driving,
   label,
@@ -647,6 +711,10 @@ function DataQuality({
       <QualityBadge
         tone={hasCommuteInfo(row) ? "good" : "missing"}
         label={hasCommuteInfo(row) ? "접근성 있음" : "접근성 필요"}
+      />
+      <QualityBadge
+        tone={row.fieldNoteUpdatedAt ? "good" : "missing"}
+        label={row.fieldNoteUpdatedAt ? "임장 있음" : "임장 필요"}
       />
       {needsSync(row) ? (
         <QualityBadge tone="warn" label="동기화 필요" />
@@ -802,6 +870,21 @@ function formatDestinationAccess(
   }
 
   return `${formatCommuteDuration(transit)} / ${formatDrivingDuration(driving)}`;
+}
+
+function formatFieldNoteValue(
+  row: ReturnType<typeof buildApartmentComparisonRows>[number],
+) {
+  if (!row.fieldNoteDate && !row.fieldNoteRating && !row.fieldNoteConclusion) {
+    return "-";
+  }
+
+  return [
+    row.fieldNoteRating !== null ? `평점 ${row.fieldNoteRating}/5` : null,
+    row.fieldNoteDate ? formatDate(row.fieldNoteDate) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ") || row.fieldNoteConclusion || "-";
 }
 
 function formatMeters(value: number) {

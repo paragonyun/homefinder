@@ -13,6 +13,10 @@ import {
   type CommuteSummary,
 } from "@/lib/services/commute-summary";
 import {
+  buildLatestFieldNoteSummary,
+  getLatestFieldNoteByApartmentId,
+} from "@/lib/services/field-note-summary";
+import {
   formatCommuteRefreshMessage,
   type CommuteRefreshResult,
 } from "@/lib/services/commute-refresh-result";
@@ -45,6 +49,7 @@ import type {
   ApartmentRowData,
   ApartmentTransactionRow,
   CommuteTimeRow,
+  FieldNoteRow,
 } from "@/lib/supabase/table-types";
 import { formatDate } from "@/utils/date";
 import { formatKrw } from "@/utils/format-price";
@@ -117,6 +122,9 @@ export function ApartmentDetailClient({
     useState<ApartmentBuildingInfoRow | null>(null);
   const [transactions, setTransactions] = useState<ApartmentTransactionRow[]>([]);
   const [commuteTimes, setCommuteTimes] = useState<CommuteTimeRow[]>([]);
+  const [latestFieldNote, setLatestFieldNote] = useState<FieldNoteRow | null>(
+    null,
+  );
   const [candidateNames, setCandidateNames] = useState<
     Array<{ name: string; count: number }>
   >([]);
@@ -147,6 +155,7 @@ export function ApartmentDetailClient({
       setBuildingInfo(null);
       setTransactions([]);
       setCommuteTimes([]);
+      setLatestFieldNote(null);
       return;
     }
 
@@ -156,6 +165,7 @@ export function ApartmentDetailClient({
       { data: buildingInfoData, error: buildingInfoError },
       { data: transactionData, error: transactionError },
       { data: commuteData, error: commuteError },
+      { data: fieldNoteData, error: fieldNoteError },
     ] = await Promise.all([
       supabase
         .from("apartments")
@@ -187,6 +197,13 @@ export function ApartmentDetailClient({
         .select("*")
         .eq("apartment_id", apartmentId)
         .order("fetched_at", { ascending: false }),
+      supabase
+        .from("field_notes")
+        .select("*")
+        .eq("apartment_id", apartmentId)
+        .order("visit_date", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .limit(20),
     ]);
 
     if (apartmentError) {
@@ -228,6 +245,16 @@ export function ApartmentDetailClient({
         commuteError ? [] : ((commuteData ?? []) as CommuteTimeRow[]),
       );
     }
+
+    if (fieldNoteError && !isMissingTableError(fieldNoteError)) {
+      setMessage(fieldNoteError.message);
+    } else {
+      const latestByApartmentId = getLatestFieldNoteByApartmentId(
+        fieldNoteError ? [] : ((fieldNoteData ?? []) as FieldNoteRow[]),
+      );
+
+      setLatestFieldNote(latestByApartmentId.get(apartmentId) ?? null);
+    }
   }, [apartmentId, mockApartment, supabase]);
 
   useEffect(() => {
@@ -260,6 +287,7 @@ export function ApartmentDetailClient({
         setBuildingInfo(null);
         setTransactions([]);
         setCommuteTimes([]);
+        setLatestFieldNote(null);
       }
     });
 
@@ -605,6 +633,10 @@ export function ApartmentDetailClient({
     basicInfo?.parking_count ?? null,
     basicInfo?.household_count ?? null,
   );
+  const latestFieldNoteSummary = useMemo(
+    () => buildLatestFieldNoteSummary(latestFieldNote),
+    [latestFieldNote],
+  );
   const hasAnySyncInProgress =
     isComprehensiveSyncing ||
     isSyncing ||
@@ -671,6 +703,11 @@ export function ApartmentDetailClient({
               label="저장 거래"
               value={`${totalTransactionCount.toLocaleString("ko-KR")}건`}
               detail="취소 거래 제외"
+            />
+            <HeroMetric
+              label="임장 판단"
+              value={latestFieldNoteSummary?.conclusion ?? "기록 없음"}
+              detail={formatFieldNoteMetricDetail(latestFieldNoteSummary)}
             />
             <HeroMetric
               label="여의도역"
@@ -1139,6 +1176,7 @@ export function ApartmentDetailClient({
               apartmentId={apartmentId}
               apartmentName={title ?? "단지 정보 없음"}
               isMockApartment={Boolean(mockApartment)}
+              onNotesChanged={loadApartment}
               showAuthPanel={false}
             />
           </div>
@@ -1411,6 +1449,22 @@ function formatAccessMetric(
   return `${formatCommuteMetric(access.transit)} / ${formatCommuteMetric(
     access.driving,
   )}`;
+}
+
+function formatFieldNoteMetricDetail(
+  summary: ReturnType<typeof buildLatestFieldNoteSummary>,
+) {
+  if (!summary) {
+    return "임장 후기 입력 필요";
+  }
+
+  const parts = [
+    summary.overallRating !== null ? `평점 ${summary.overallRating}/5` : null,
+    summary.visitDate ? formatDate(summary.visitDate) : null,
+    summary.recheckText ? "재확인 메모 있음" : null,
+  ].filter(Boolean);
+
+  return parts.join(" · ") || "최근 임장 기록";
 }
 
 function formatCommuteSubtext(commute: CommuteSummary) {

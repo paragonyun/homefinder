@@ -15,6 +15,7 @@ type FieldNotesClientProps = {
   apartmentId: string;
   apartmentName: string;
   isMockApartment: boolean;
+  onNotesChanged?: () => void | Promise<void>;
   showAuthPanel?: boolean;
 };
 
@@ -80,6 +81,7 @@ export function FieldNotesClient({
   apartmentId,
   apartmentName,
   isMockApartment,
+  onNotesChanged,
   showAuthPanel = true,
 }: Readonly<FieldNotesClientProps>) {
   const [session, setSession] = useState<Session | null>(null);
@@ -182,6 +184,7 @@ export function FieldNotesClient({
     } else {
       setForm(emptyForm);
       await loadNotes();
+      await onNotesChanged?.();
       setMessage("임장 메모를 저장했습니다.");
     }
 
@@ -200,6 +203,7 @@ export function FieldNotesClient({
       setMessage(error.message);
     } else {
       await loadNotes();
+      await onNotesChanged?.();
       setMessage("임장 메모를 삭제했습니다.");
     }
 
@@ -420,9 +424,22 @@ export function FieldNotesClient({
         </p>
       ) : null}
 
-      {notes.length > 0 ? (
-        <section className="grid gap-3">
-          {notes.map((note) => (
+      <section className="grid gap-3">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-950">
+              저장된 임장 기록
+            </h3>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              최근 방문 결론과 다시 확인할 내용을 판단 근거로 남깁니다.
+            </p>
+          </div>
+          <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+            {notes.length.toLocaleString("ko-KR")}건
+          </span>
+        </div>
+        {notes.length > 0 ? (
+          notes.map((note) => (
             <article
               key={note.id}
               className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
@@ -469,9 +486,14 @@ export function FieldNotesClient({
                 />
               </div>
             </article>
-          ))}
-        </section>
-      ) : null}
+          ))
+        ) : (
+          <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+            아직 저장된 임장 기록이 없습니다. 방문 후 결론과 재확인 항목을
+            남기면 단지 상세와 비교 화면에 함께 표시됩니다.
+          </p>
+        )}
+      </section>
     </div>
   );
 }

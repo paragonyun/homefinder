@@ -1,6 +1,6 @@
 # HomeScope
 
-HomeScope는 개인이 관심 동네와 아파트를 모아 실거래가, 단지 기본정보, 접근성, 학군, 임장 메모, 판단 기록을 한곳에서 비교하기 위한 부동산 리서치 보드입니다.
+HomeScope는 개인이 관심 동네와 아파트를 모아 실거래가, 단지 기본정보, 접근성, 임장 메모, 판단 기록을 한곳에서 비교하기 위한 부동산 리서치 보드입니다.
 
 상업용 대규모 서비스가 아니라 본인과 소수 사용자를 위한 개인용 웹앱입니다. 첫 커밋은 완성 기능보다 문서, 구조, placeholder 화면을 만드는 데 초점을 둡니다.
 
@@ -37,7 +37,6 @@ KAPT_API_KEY=
 TMAP_API_KEY=
 TMAP_TRANSIT_API_KEY=
 TMAP_DRIVING_API_KEY=
-NEIS_API_KEY=
 KAKAO_REST_API_KEY=
 TRANSIT_API_KEY=
 

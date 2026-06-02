@@ -27,7 +27,7 @@ export default function SettingsPage() {
           <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-semibold text-slate-950">외부 데이터</p>
             <p className="mt-1 text-sm text-slate-600">
-              국토부, K-apt, NEIS, Kakao, 교통 API는 서버 route 또는 batch에서만
+              국토부, K-apt, Kakao, 교통 API는 서버 route 또는 batch에서만
               호출합니다.
             </p>
           </div>

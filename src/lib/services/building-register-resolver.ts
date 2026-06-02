@@ -39,9 +39,9 @@ export function resolveBuildingRegisterQuery({
   bjdCodes: BuildingRegisterBjdCodeHint[];
   lawdCd: string | null | undefined;
 }): BuildingRegisterQueryResolution {
-  const bjdCode = resolveBjdCode(lawdCd, bjdCodes);
+  const bjdCodeOptions = resolveBjdCodeOptions(lawdCd, bjdCodes);
 
-  if (!bjdCode) {
+  if (bjdCodeOptions.length === 0) {
     return {
       ok: false,
       error: "건축물대장 조회에는 10자리 법정동코드가 필요합니다.",
@@ -54,6 +54,8 @@ export function resolveBuildingRegisterQuery({
     if (!lot) {
       continue;
     }
+
+    const bjdCode = orderBjdCodesForAddress(address.source, bjdCodeOptions)[0];
 
     return {
       ok: true,
@@ -101,18 +103,21 @@ export function parseBuildingRegisterLotAddress(
   };
 }
 
-function resolveBjdCode(
+function resolveBjdCodeOptions(
   lawdCd: string | null | undefined,
   bjdCodes: BuildingRegisterBjdCodeHint[],
 ) {
   const cleanedLawdCd = cleanCode(lawdCd);
+  const candidates: Array<{ value: string; source: string }> = [];
 
   if (cleanedLawdCd && /^\d{10}$/.test(cleanedLawdCd)) {
-    return { value: cleanedLawdCd, source: "apartments.lawd_cd" };
+    candidates.push({ value: cleanedLawdCd, source: "apartments.lawd_cd" });
   }
 
   const prefix =
-    cleanedLawdCd && /^\d{5}$/.test(cleanedLawdCd) ? cleanedLawdCd : null;
+    cleanedLawdCd && /^\d{5,10}$/.test(cleanedLawdCd)
+      ? cleanedLawdCd.slice(0, 5)
+      : null;
 
   for (const hint of bjdCodes) {
     const value = cleanCode(hint.value);
@@ -122,11 +127,46 @@ function resolveBjdCode(
     }
 
     if (!prefix || value.startsWith(prefix)) {
-      return { value, source: hint.source };
+      candidates.push({ value, source: hint.source });
     }
   }
 
-  return null;
+  return dedupeBjdCodes(candidates);
+}
+
+function orderBjdCodesForAddress(
+  addressSource: string,
+  bjdCodes: Array<{ value: string; source: string }>,
+) {
+  if (
+    addressSource.startsWith("apartment_basic_info.") ||
+    addressSource.startsWith("kapt_code_directory.")
+  ) {
+    return [...bjdCodes].sort((left, right) => {
+      const leftIsApartment = left.source === "apartments.lawd_cd";
+      const rightIsApartment = right.source === "apartments.lawd_cd";
+
+      return Number(leftIsApartment) - Number(rightIsApartment);
+    });
+  }
+
+  return bjdCodes;
+}
+
+function dedupeBjdCodes(candidates: Array<{ value: string; source: string }>) {
+  const seen = new Set<string>();
+  const result: Array<{ value: string; source: string }> = [];
+
+  for (const candidate of candidates) {
+    if (seen.has(candidate.value)) {
+      continue;
+    }
+
+    seen.add(candidate.value);
+    result.push(candidate);
+  }
+
+  return result;
 }
 
 function cleanText(value: string | null | undefined) {

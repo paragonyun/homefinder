@@ -69,7 +69,14 @@ type TransactionSyncResult = {
   dealYmd?: string;
   matchedDealYmds?: string[];
   monthsChecked?: number;
-  candidateNames?: Array<{ name: string; count: number }>;
+  candidateNames?: MolitTransactionCandidate[];
+};
+
+type MolitTransactionCandidate = {
+  name: string;
+  count: number;
+  latestDealDate?: string;
+  addresses?: Array<{ address: string; count: number }>;
 };
 
 type BasicInfoSyncResult = {
@@ -130,7 +137,7 @@ export function ApartmentDetailClient({
     null,
   );
   const [candidateNames, setCandidateNames] = useState<
-    Array<{ name: string; count: number }>
+    MolitTransactionCandidate[]
   >([]);
   const [kaptCodeCandidates, setKaptCodeCandidates] = useState<
     KaptCodeCandidate[]
@@ -524,6 +531,37 @@ export function ApartmentDetailClient({
     }
   }
 
+  async function handleSelectMolitCandidate(candidateName: string) {
+    if (!supabase || !session || !apartment || !isAdmin) {
+      setMessage("국토부 실거래가 후보 선택은 운영자 계정만 실행할 수 있습니다.");
+      return;
+    }
+
+    setIsSyncing(true);
+    setMessage(null);
+
+    try {
+      const accessToken = await getAccessToken();
+      const result = await syncTransactions(accessToken, {
+        selectedCandidateName: candidateName,
+      });
+
+      await loadApartment();
+      setCandidateNames(result.candidateNames ?? []);
+      setMessage(
+        result.matchedCount && result.matchedCount > 0
+          ? `국토부 후보명 '${candidateName}'을 실거래가 이름으로 저장했고, ${formatTransactionSyncMessage(
+              result,
+            )}`
+          : `국토부 후보명 '${candidateName}'으로 저장할 거래를 찾지 못했습니다.`,
+      );
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
   async function getAccessToken() {
     if (!supabase) {
       return "";
@@ -536,10 +574,14 @@ export function ApartmentDetailClient({
     return currentSession?.access_token ?? "";
   }
 
-  async function syncTransactions(accessToken: string) {
+  async function syncTransactions(
+    accessToken: string,
+    body: Record<string, unknown> = {},
+  ) {
     const { response, result } = await postApartmentJson<TransactionSyncResult>(
       `/api/apartments/${apartmentId}/transactions/sync`,
       accessToken,
+      body,
     );
 
     if (!response.ok) {
@@ -807,9 +849,10 @@ export function ApartmentDetailClient({
           message={message}
           candidateNames={candidateNames}
           kaptCodeCandidates={kaptCodeCandidates}
-          isSelecting={isComprehensiveSyncing}
+          isSelecting={isComprehensiveSyncing || isSyncing}
           canSelect={isAdmin}
           onSelectCandidate={handleSelectKaptCandidate}
+          onSelectMolitCandidate={handleSelectMolitCandidate}
         />
       ) : null}
 
@@ -1598,13 +1641,15 @@ function SyncStatusPanel({
   kaptCodeCandidates,
   message,
   onSelectCandidate,
+  onSelectMolitCandidate,
 }: Readonly<{
   canSelect: boolean;
-  candidateNames: Array<{ name: string; count: number }>;
+  candidateNames: MolitTransactionCandidate[];
   isSelecting: boolean;
   kaptCodeCandidates: KaptCodeCandidate[];
   message: string | null;
   onSelectCandidate: (kaptCode: string) => void | Promise<void>;
+  onSelectMolitCandidate: (candidateName: string) => void | Promise<void>;
 }>) {
   return (
     <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -1632,19 +1677,39 @@ function SyncStatusPanel({
 
       {candidateNames.length > 0 ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p className="font-semibold">국토부 원천명 후보</p>
+          <p className="font-semibold">국토부 실거래가 단지명 후보</p>
           <p className="mt-1 leading-6">
-            단지명 매칭이 애매합니다. 필요한 경우 단지 수정 화면에서 alias를
-            추가한 뒤 다시 동기화하세요.
+            저장된 단지명과 국토부 원천명이 다릅니다. 주소가 맞는 후보를
+            선택하면 해당 이름을 실거래가 alias로 저장한 뒤 다시 조회합니다.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 grid gap-2">
             {candidateNames.map((candidate) => (
-              <span
+              <div
                 key={candidate.name}
-                className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold"
+                className="flex flex-col gap-3 rounded-md border border-amber-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
               >
-                {candidate.name} · {candidate.count}건
-              </span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-950">
+                    {candidate.name} · {candidate.count.toLocaleString("ko-KR")}건
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    {formatMolitCandidateAddressSummary(candidate)}
+                  </p>
+                  {candidate.latestDealDate ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      최근 후보 거래 {formatDate(candidate.latestDealDate)}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void onSelectMolitCandidate(candidate.name)}
+                  disabled={isSelecting || !canSelect}
+                  className="h-9 w-full rounded-md bg-amber-600 px-3 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:bg-slate-300 sm:w-auto"
+                >
+                  이 이름으로 조회
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -2137,6 +2202,21 @@ function formatCandidateAddress(candidate: KaptCodeCandidate) {
       .filter(Boolean)
       .join(" ")
   );
+}
+
+function formatMolitCandidateAddressSummary(candidate: MolitTransactionCandidate) {
+  const addresses = candidate.addresses ?? [];
+
+  if (addresses.length === 0) {
+    return "주소 근거 없음";
+  }
+
+  return addresses
+    .map(
+      (item) =>
+        `${item.address} · ${item.count.toLocaleString("ko-KR")}건`,
+    )
+    .join(" / ");
 }
 
 function formatOptionalCount(value: number | null, suffix: string) {

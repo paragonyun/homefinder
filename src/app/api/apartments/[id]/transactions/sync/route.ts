@@ -3,14 +3,16 @@ import { NextResponse } from "next/server";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
   fetchMolitApartmentTradePages,
-  isMolitApartmentNameCandidate,
-  isMolitApartmentNameMatch,
   MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT,
   normalizeApartmentNameForMolit,
   resolveMolitDealYmds,
   type MolitApartmentTrade,
   type MolitApartmentTradePage,
 } from "@/lib/data-providers/molit-transactions";
+import {
+  buildMolitTransactionCandidates,
+  filterMatchingMolitTransactions,
+} from "@/lib/services/molit-transaction-matching";
 import {
   createSupabaseRouteClient,
   isSupabaseServerConfigured,
@@ -128,6 +130,15 @@ export async function POST(
       .map((alias) => normalizeApartmentNameForMolit(alias.alias))
       .filter(Boolean),
   );
+  const selectedCandidateName =
+    typeof body.selectedCandidateName === "string"
+      ? body.selectedCandidateName.trim()
+      : "";
+
+  if (selectedCandidateName) {
+    sourceNames.push(normalizeApartmentNameForMolit(selectedCandidateName));
+  }
+
   const uniqueSourceNames = Array.from(new Set(sourceNames.filter(Boolean)));
   const addressTokens = getAddressNumberTokens([
     apartment.address,
@@ -143,7 +154,7 @@ export async function POST(
     dealYmd: string;
     page: MolitApartmentTradePage;
   }> = [];
-  const candidateNames = new Map<string, number>();
+  const candidateTransactions: MolitApartmentTrade[] = [];
   let selectedDealYmd: string | null = null;
   const transactions: MolitApartmentTrade[] = [];
 
@@ -154,20 +165,15 @@ export async function POST(
         lawdCd: molitLawdCd,
         dealYmd,
       });
-      const matchedTransactions = getMatchingTransactions(
-        pages,
-        uniqueSourceNames,
+      const matchedTransactions = filterMatchingMolitTransactions({
+        transactions: pages.flatMap((page) => page.transactions),
+        sourceNames: uniqueSourceNames,
         legalDongCd,
-      );
+        addressTokens,
+      });
 
       if (matchedTransactions.length === 0) {
-        collectCandidateNames({
-          pages,
-          sourceNames: uniqueSourceNames,
-          legalDongCd,
-          addressTokens,
-          candidateNames,
-        });
+        candidateTransactions.push(...pages.flatMap((page) => page.transactions));
       }
 
       attempts.push({
@@ -202,6 +208,12 @@ export async function POST(
       { status: 502 },
     );
   }
+  const candidateNames = buildMolitTransactionCandidates({
+    transactions: candidateTransactions,
+    sourceNames: uniqueSourceNames,
+    legalDongCd,
+    addressTokens,
+  });
 
   const { data: rawResponse, error: rawError } = await supabase
     .from("raw_api_responses")
@@ -217,6 +229,7 @@ export async function POST(
           mode: dealYmds.mode,
           dealYmds: dealYmds.dealYmds,
           sourceNames: uniqueSourceNames,
+          selectedCandidateName,
         }),
       ),
       request_params: {
@@ -227,6 +240,7 @@ export async function POST(
         mode: dealYmds.mode,
         dealYmds: dealYmds.dealYmds,
         sourceNames: uniqueSourceNames,
+        selectedCandidateName: selectedCandidateName || null,
         attempts,
       },
       response_body: {
@@ -234,7 +248,7 @@ export async function POST(
         matchedCount: transactions.length,
         matchedDealYmd: selectedDealYmd,
         matchedDealYmds: getMatchedDealYmds(transactions),
-        candidateNames: toCandidateNameList(candidateNames),
+        candidateNames,
         attempts,
         pages: matchedPageRecords.map(({ dealYmd, page }) => ({
           dealYmd,
@@ -269,6 +283,27 @@ export async function POST(
     if (upsertError) {
       return NextResponse.json({ error: upsertError.message }, { status: 500 });
     }
+
+    if (selectedCandidateName) {
+      const { error: aliasUpsertError } = await supabase
+        .from("apartment_aliases")
+        .upsert(
+          {
+            user_id: user.id,
+            apartment_id: apartmentId,
+            alias: selectedCandidateName,
+            source: "molit",
+          },
+          { onConflict: "apartment_id,source,alias" },
+        );
+
+      if (aliasUpsertError && aliasUpsertError.code !== "42P01") {
+        return NextResponse.json(
+          { error: aliasUpsertError.message },
+          { status: 500 },
+        );
+      }
+    }
   }
 
   return NextResponse.json({
@@ -278,7 +313,7 @@ export async function POST(
     matchedDealYmds: getMatchedDealYmds(transactions),
     monthsChecked: attempts.length,
     mode: dealYmds.mode,
-    candidateNames: toCandidateNameList(candidateNames),
+    candidateNames,
   });
 }
 
@@ -291,66 +326,6 @@ function getMatchedDealYmds(transactions: MolitApartmentTrade[]) {
       ),
     ),
   ).sort((left, right) => right.localeCompare(left));
-}
-
-function getMatchingTransactions(
-  pages: MolitApartmentTradePage[],
-  sourceNames: string[],
-  legalDongCd: string | null,
-) {
-  return pages
-    .flatMap((page) => page.transactions)
-    .filter((transaction) =>
-      matchesLegalDong(transaction, legalDongCd) &&
-      isMolitApartmentNameMatch(transaction.apartmentNameFromSource, sourceNames),
-    );
-}
-
-function matchesLegalDong(
-  transaction: MolitApartmentTrade,
-  legalDongCd: string | null,
-) {
-  return !legalDongCd || !transaction.umdCd || transaction.umdCd === legalDongCd;
-}
-
-function collectCandidateNames({
-  pages,
-  sourceNames,
-  legalDongCd,
-  addressTokens,
-  candidateNames,
-}: {
-  pages: MolitApartmentTradePage[];
-  sourceNames: string[];
-  legalDongCd: string | null;
-  addressTokens: string[];
-  candidateNames: Map<string, number>;
-}) {
-  for (const transaction of pages.flatMap((page) => page.transactions)) {
-    const sourceName = transaction.apartmentNameFromSource;
-
-    if (!sourceName || !matchesLegalDong(transaction, legalDongCd)) {
-      continue;
-    }
-
-    const hasAddressMatch =
-      addressTokens.length > 0 &&
-      addressTokens.some((token) => transaction.addressFromSource?.includes(token));
-    const hasNameCandidate = isMolitApartmentNameCandidate(sourceName, sourceNames);
-
-    if (!hasAddressMatch && !hasNameCandidate) {
-      continue;
-    }
-
-    candidateNames.set(sourceName, (candidateNames.get(sourceName) ?? 0) + 1);
-  }
-}
-
-function toCandidateNameList(candidateNames: Map<string, number>) {
-  return Array.from(candidateNames.entries())
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, 12)
-    .map(([name, count]) => ({ name, count }));
 }
 
 function getAddressNumberTokens(values: Array<string | null>) {
@@ -426,7 +401,11 @@ function getBearerToken(request: Request) {
 
 async function readJsonBody(request: Request) {
   try {
-    return (await request.json()) as { dealYmd?: unknown; months?: unknown };
+    return (await request.json()) as {
+      dealYmd?: unknown;
+      months?: unknown;
+      selectedCandidateName?: unknown;
+    };
   } catch {
     return {};
   }

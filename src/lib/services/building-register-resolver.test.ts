@@ -61,6 +61,31 @@ describe("resolveBuildingRegisterQuery", () => {
     });
   });
 
+  it("prefers a K-apt directory bjd code for a K-apt legal address", () => {
+    const result = resolveBuildingRegisterQuery({
+      lawdCd: "1159010200",
+      bjdCodes: [{ value: "1159010100", source: "kapt_code_directory" }],
+      addresses: [
+        {
+          value: "서울특별시 동작구 노량진동 324 상도건영",
+          source: "apartment_basic_info.legal_address_from_source",
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      query: {
+        sigunguCd: "11590",
+        bjdongCd: "10100",
+        platGbCd: "0",
+        bun: "0324",
+        ji: "0000",
+      },
+      bjdCodeSource: "kapt_code_directory",
+    });
+  });
+
   it("falls back to K-apt directory bjd code and transaction source address", () => {
     const result = resolveBuildingRegisterQuery({
       lawdCd: "11500",

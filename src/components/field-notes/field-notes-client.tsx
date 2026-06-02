@@ -15,15 +15,27 @@ type FieldNotesClientProps = {
   apartmentId: string;
   apartmentName: string;
   isMockApartment: boolean;
+  showAuthPanel?: boolean;
 };
 
 type FieldNoteFormState = {
   visitDate: string;
   visitTime: string;
   weather: string;
+  revisitIntention: string;
+  stationWalkRating: string;
+  slopeRating: string;
+  complexConditionRating: string;
+  parkingRating: string;
+  noiseRating: string;
+  nightMoodRating: string;
+  commercialAreaRating: string;
   overallRating: string;
   goodPoints: string;
   badPoints: string;
+  parkingNote: string;
+  noiseNote: string;
+  slopeNote: string;
   overallMemo: string;
 };
 
@@ -31,19 +43,44 @@ const emptyForm: FieldNoteFormState = {
   visitDate: "",
   visitTime: "",
   weather: "",
+  revisitIntention: "",
+  stationWalkRating: "",
+  slopeRating: "",
+  complexConditionRating: "",
+  parkingRating: "",
+  noiseRating: "",
+  nightMoodRating: "",
+  commercialAreaRating: "",
   overallRating: "",
   goodPoints: "",
   badPoints: "",
+  parkingNote: "",
+  noiseNote: "",
+  slopeNote: "",
   overallMemo: "",
 };
 
 const ratingOptions = [1, 2, 3, 4, 5] as const;
 const weatherOptions = ["맑음", "흐림", "비", "눈", "더움", "추움"] as const;
+const revisitOptions = ["관심 유지", "보류", "제외", "재확인 필요"] as const;
+const checklistItems = [
+  { field: "stationWalkRating", label: "교통 동선" },
+  { field: "slopeRating", label: "경사/언덕" },
+  { field: "complexConditionRating", label: "단지 관리" },
+  { field: "parkingRating", label: "주차" },
+  { field: "noiseRating", label: "소음" },
+  { field: "nightMoodRating", label: "야간 분위기" },
+  { field: "commercialAreaRating", label: "생활 편의" },
+] as const satisfies readonly {
+  field: keyof FieldNoteFormState;
+  label: string;
+}[];
 
 export function FieldNotesClient({
   apartmentId,
   apartmentName,
   isMockApartment,
+  showAuthPanel = true,
 }: Readonly<FieldNotesClientProps>) {
   const [session, setSession] = useState<Session | null>(null);
   const [notes, setNotes] = useState<FieldNoteRow[]>([]);
@@ -171,7 +208,7 @@ export function FieldNotesClient({
 
   return (
     <div className="grid gap-5">
-      <AuthPanel />
+      {showAuthPanel ? <AuthPanel /> : null}
 
       {!isSupabaseConfigured || !session || isMockApartment ? (
         <p className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
@@ -193,6 +230,9 @@ export function FieldNotesClient({
             <h2 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">
               {apartmentName}
             </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              방문 당시 체감한 장점, 리스크, 재확인할 내용을 판단 근거로 남깁니다.
+            </p>
           </div>
           <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
             기록 {notes.length.toLocaleString("ko-KR")}건
@@ -250,26 +290,51 @@ export function FieldNotesClient({
           </div>
           <div className="grid gap-2 text-sm font-medium text-slate-700">
             종합 평점
-            <div className="grid grid-cols-5 gap-2">
-              {ratingOptions.map((rating) => (
+            <RatingButtons
+              value={form.overallRating}
+              onChange={(value) => updateFormField("overallRating", value)}
+            />
+          </div>
+          <div className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+            한 줄 결론
+            <div className="flex flex-wrap gap-2">
+              {revisitOptions.map((option) => (
                 <button
                   type="button"
-                  key={rating}
-                  aria-pressed={form.overallRating === String(rating)}
-                  onClick={() =>
-                    updateFormField(
-                      "overallRating",
-                      form.overallRating === String(rating) ? "" : String(rating),
-                    )
-                  }
-                  className={`h-11 rounded-md border text-sm font-semibold transition ${
-                    form.overallRating === String(rating)
-                      ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                  key={option}
+                  onClick={() => updateFormField("revisitIntention", option)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    form.revisitIntention === option
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
                       : "border-slate-200 bg-white text-slate-600"
                   }`}
                 >
-                  {rating}
+                  {option}
                 </button>
+              ))}
+            </div>
+            <input
+              value={form.revisitIntention}
+              onChange={(event) =>
+                updateFormField("revisitIntention", event.target.value)
+              }
+              className="h-11 rounded-md border border-slate-300 px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              placeholder="직접 입력"
+            />
+          </div>
+          <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+            <p className="text-sm font-semibold text-slate-800">체감 체크리스트</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {checklistItems.map((item) => (
+                <div key={item.field} className="grid gap-2">
+                  <p className="text-xs font-semibold text-slate-600">
+                    {item.label}
+                  </p>
+                  <RatingButtons
+                    value={form[item.field]}
+                    onChange={(value) => updateFormField(item.field, value)}
+                  />
+                </div>
               ))}
             </div>
           </div>
@@ -295,15 +360,48 @@ export function FieldNotesClient({
               placeholder="아쉬웠던 점"
             />
           </label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            주차 메모
+            <textarea
+              value={form.parkingNote}
+              onChange={(event) =>
+                updateFormField("parkingNote", event.target.value)
+              }
+              className="min-h-24 rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              placeholder="주차장 동선, 여유, 이중주차"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            소음 메모
+            <textarea
+              value={form.noiseNote}
+              onChange={(event) =>
+                updateFormField("noiseNote", event.target.value)
+              }
+              className="min-h-24 rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              placeholder="대로변, 상가, 단지 내부 소음"
+            />
+          </label>
           <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
-            한 줄 총평
+            경사/동선 메모
+            <textarea
+              value={form.slopeNote}
+              onChange={(event) =>
+                updateFormField("slopeNote", event.target.value)
+              }
+              className="min-h-24 rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+              placeholder="언덕, 횡단보도, 역/버스정류장까지 체감 동선"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+            총평 / 다시 확인할 것
             <textarea
               value={form.overallMemo}
               onChange={(event) =>
                 updateFormField("overallMemo", event.target.value)
               }
               className="min-h-28 rounded-md border border-slate-300 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              placeholder="다시 볼지, 보류할지, 추가 확인할 점"
+              placeholder="다음 방문이나 매수 검토 전에 다시 확인할 점"
             />
           </label>
         </div>
@@ -338,6 +436,9 @@ export function FieldNotesClient({
                     <NoteMeta label={note.visit_time ?? "시간 미입력"} />
                     <NoteMeta label={note.weather ?? "날씨 미입력"} />
                     <NoteMeta
+                      label={note.revisit_intention ?? "결론 미입력"}
+                    />
+                    <NoteMeta
                       label={
                         note.overall_rating !== null
                           ? `평점 ${note.overall_rating}/5`
@@ -355,19 +456,80 @@ export function FieldNotesClient({
                   삭제
                 </button>
               </div>
+              <FieldNoteRatingSummary note={note} />
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <NoteSection label="장점" value={note.good_points} />
                 <NoteSection label="단점" value={note.bad_points} />
+                <NoteSection label="주차" value={note.parking_note} />
+                <NoteSection label="소음" value={note.noise_note} />
+                <NoteSection label="경사/동선" value={note.slope_note} />
                 <NoteSection
-                  label="총평"
+                  label="총평 / 다시 확인할 것"
                   value={note.overall_memo}
-                  className="md:col-span-2"
                 />
               </div>
             </article>
           ))}
         </section>
       ) : null}
+    </div>
+  );
+}
+
+function RatingButtons({
+  onChange,
+  value,
+}: Readonly<{ onChange: (value: string) => void; value: string }>) {
+  return (
+    <div className="grid grid-cols-5 gap-1.5">
+      {ratingOptions.map((rating) => {
+        const nextValue = String(rating);
+
+        return (
+          <button
+            type="button"
+            key={rating}
+            aria-pressed={value === nextValue}
+            onClick={() => onChange(value === nextValue ? "" : nextValue)}
+            className={`h-10 rounded-md border text-sm font-semibold transition ${
+              value === nextValue
+                ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                : "border-slate-200 bg-white text-slate-600"
+            }`}
+          >
+            {rating}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FieldNoteRatingSummary({ note }: Readonly<{ note: FieldNoteRow }>) {
+  const ratings = [
+    ["교통", note.station_walk_rating],
+    ["경사", note.slope_rating],
+    ["관리", note.complex_condition_rating],
+    ["주차", note.parking_rating],
+    ["소음", note.noise_rating],
+    ["야간", note.night_mood_rating],
+    ["생활", note.commercial_area_rating],
+  ].filter(([, value]) => value !== null);
+
+  if (ratings.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {ratings.map(([label, value]) => (
+        <span
+          key={label}
+          className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700"
+        >
+          {label} {value}/5
+        </span>
+      ))}
     </div>
   );
 }

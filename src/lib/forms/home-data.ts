@@ -201,10 +201,21 @@ export type FieldNoteInput = {
   visitDate?: unknown;
   visitTime?: unknown;
   weather?: unknown;
+  stationWalkRating?: unknown;
+  slopeRating?: unknown;
+  complexConditionRating?: unknown;
+  parkingRating?: unknown;
+  noiseRating?: unknown;
+  nightMoodRating?: unknown;
+  commercialAreaRating?: unknown;
   overallRating?: unknown;
   goodPoints?: unknown;
   badPoints?: unknown;
+  parkingNote?: unknown;
+  noiseNote?: unknown;
+  slopeNote?: unknown;
   overallMemo?: unknown;
+  revisitIntention?: unknown;
 };
 
 export type FieldNotePayload = {
@@ -212,10 +223,21 @@ export type FieldNotePayload = {
   visit_date: string | null;
   visit_time: string | null;
   weather: string | null;
+  station_walk_rating: number | null;
+  slope_rating: number | null;
+  complex_condition_rating: number | null;
+  parking_rating: number | null;
+  noise_rating: number | null;
+  night_mood_rating: number | null;
+  commercial_area_rating: number | null;
   overall_rating: number | null;
   good_points: string | null;
   bad_points: string | null;
+  parking_note: string | null;
+  noise_note: string | null;
+  slope_note: string | null;
   overall_memo: string | null;
+  revisit_intention: string | null;
 };
 
 export function validateFieldNoteInput(
@@ -233,6 +255,51 @@ export function validateFieldNoteInput(
     return rating;
   }
 
+  const stationWalkRating = cleanOptionalInteger(input.stationWalkRating, "역 도보 체감", 1, 5);
+  if (!stationWalkRating.ok) {
+    return stationWalkRating;
+  }
+
+  const slopeRating = cleanOptionalInteger(input.slopeRating, "경사 체감", 1, 5);
+  if (!slopeRating.ok) {
+    return slopeRating;
+  }
+
+  const complexConditionRating = cleanOptionalInteger(
+    input.complexConditionRating,
+    "단지 관리상태",
+    1,
+    5,
+  );
+  if (!complexConditionRating.ok) {
+    return complexConditionRating;
+  }
+
+  const parkingRating = cleanOptionalInteger(input.parkingRating, "주차 체감", 1, 5);
+  if (!parkingRating.ok) {
+    return parkingRating;
+  }
+
+  const noiseRating = cleanOptionalInteger(input.noiseRating, "소음 체감", 1, 5);
+  if (!noiseRating.ok) {
+    return noiseRating;
+  }
+
+  const nightMoodRating = cleanOptionalInteger(input.nightMoodRating, "야간 분위기", 1, 5);
+  if (!nightMoodRating.ok) {
+    return nightMoodRating;
+  }
+
+  const commercialAreaRating = cleanOptionalInteger(
+    input.commercialAreaRating,
+    "생활편의 체감",
+    1,
+    5,
+  );
+  if (!commercialAreaRating.ok) {
+    return commercialAreaRating;
+  }
+
   return {
     ok: true,
     value: {
@@ -240,10 +307,21 @@ export function validateFieldNoteInput(
       visit_date: cleanText(input.visitDate),
       visit_time: cleanText(input.visitTime),
       weather: cleanText(input.weather),
+      station_walk_rating: stationWalkRating.value,
+      slope_rating: slopeRating.value,
+      complex_condition_rating: complexConditionRating.value,
+      parking_rating: parkingRating.value,
+      noise_rating: noiseRating.value,
+      night_mood_rating: nightMoodRating.value,
+      commercial_area_rating: commercialAreaRating.value,
       overall_rating: rating.value,
       good_points: cleanText(input.goodPoints),
       bad_points: cleanText(input.badPoints),
+      parking_note: cleanText(input.parkingNote),
+      noise_note: cleanText(input.noiseNote),
+      slope_note: cleanText(input.slopeNote),
       overall_memo: cleanText(input.overallMemo),
+      revisit_intention: cleanText(input.revisitIntention),
     },
   };
 }

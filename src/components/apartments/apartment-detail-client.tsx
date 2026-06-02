@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthPanel } from "@/components/auth/auth-panel";
+import { FieldNotesClient } from "@/components/field-notes/field-notes-client";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { apartments as mockApartments } from "@/lib/mock-data";
@@ -102,7 +102,6 @@ type KaptCodeResolveResult = {
 
 const sections = [
   ["건축정보", "건축물대장 후보 데이터가 확보되면 용적률, 건폐율, 대지면적을 표시합니다."],
-  ["임장 후기", "모바일 입력 화면과 사진 업로드를 연결합니다."],
   ["내 판단", "관심/보류/제외 상태와 추가 확인사항을 남깁니다."],
   ["데이터 출처", "source, fetched_at, confidence_level을 함께 표시합니다."],
 ];
@@ -1119,23 +1118,41 @@ export function ApartmentDetailClient({
       </section>
 
       <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <details>
+          <summary className="cursor-pointer list-none">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+                  임장 후기
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  방문 기록, 체감 체크리스트, 장단점과 재확인할 내용을 접어 둡니다.
+                </p>
+              </div>
+              <span className="w-fit rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700">
+                펼쳐서 입력
+              </span>
+            </div>
+          </summary>
+          <div className="mt-5">
+            <FieldNotesClient
+              apartmentId={apartmentId}
+              apartmentName={title ?? "단지 정보 없음"}
+              isMockApartment={Boolean(mockApartment)}
+              showAuthPanel={false}
+            />
+          </div>
+        </details>
+
+        <div className="mt-5 grid gap-2 border-t border-slate-200 pt-4">
           <div>
-            <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+            <h3 className="text-sm font-semibold tracking-normal text-slate-950">
               다음 리서치 항목
-            </h2>
+            </h3>
             <p className="mt-1 text-sm leading-6 text-slate-600">
               아직 자동화되지 않은 항목은 접힌 목록으로만 유지합니다.
             </p>
           </div>
-          <Link
-            href={`/field-notes/${apartmentId}`}
-            className="w-fit rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
-          >
-            임장 메모 열기
-          </Link>
-        </div>
-        <div className="mt-4 grid gap-2">
           {sections.map(([sectionTitle, body]) => (
             <details
               key={sectionTitle}

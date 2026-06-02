@@ -7,6 +7,7 @@ import { AuthPanel } from "@/components/auth/auth-panel";
 import { StatusPill } from "@/components/ui/status-pill";
 import { apartments as mockApartments, statusLabels } from "@/lib/mock-data";
 import { buildApartmentComparisonRows } from "@/lib/services/apartment-comparison";
+import { formatBuildingDensityRatio } from "@/lib/services/building-density";
 import {
   filterComparisonRows,
   getComparisonMetrics,
@@ -826,9 +827,7 @@ function formatParkingPerHousehold(value: number | null) {
 }
 
 function formatRatioPercent(value: number | null) {
-  return value !== null
-    ? `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`
-    : "-";
+  return formatBuildingDensityRatio(value);
 }
 
 function formatBuildingAge(value: number | null) {

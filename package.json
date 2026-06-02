@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "audit:operating-data": "node scripts/audit-operating-data.mjs",
     "sync:kapt-directory": "node scripts/sync-kapt-code-directory.mjs",
     "test": "vitest run"
   },

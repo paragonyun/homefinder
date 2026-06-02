@@ -1,4 +1,8 @@
 import type { ApartmentStatus } from "@/types/apartment";
+import {
+  formatBuildingDensityRatio,
+  normalizeBuildingDensityRatio,
+} from "./building-density";
 
 export type DashboardNeighborhood = {
   id: string;
@@ -231,6 +235,12 @@ function summarizeApartment({
     basicInfo?.parking_count ?? null,
     basicInfo?.household_count ?? null,
   );
+  const floorAreaRatio = normalizeBuildingDensityRatio(
+    buildingInfo?.floor_area_ratio,
+  );
+  const buildingCoverageRatio = normalizeBuildingDensityRatio(
+    buildingInfo?.building_coverage_ratio,
+  );
   const evidence = [
     apartment.status === "interested" ? "관심" : null,
     latestPriceKrw !== null ? "최근 거래 있음" : null,
@@ -240,13 +250,11 @@ function summarizeApartment({
     parkingPerHousehold !== null
       ? `주차/세대 ${formatParkingPerHousehold(parkingPerHousehold)}`
       : null,
-    buildingInfo?.floor_area_ratio !== null &&
-    buildingInfo?.floor_area_ratio !== undefined
-      ? `용적률 ${formatRatioPercent(buildingInfo.floor_area_ratio)}`
+    floorAreaRatio !== null
+      ? `용적률 ${formatBuildingDensityRatio(floorAreaRatio)}`
       : null,
-    buildingInfo?.building_coverage_ratio !== null &&
-    buildingInfo?.building_coverage_ratio !== undefined
-      ? `건폐율 ${formatRatioPercent(buildingInfo.building_coverage_ratio)}`
+    buildingCoverageRatio !== null
+      ? `건폐율 ${formatBuildingDensityRatio(buildingCoverageRatio)}`
       : null,
   ].filter(Boolean) as string[];
   const missingBadges = [
@@ -263,8 +271,8 @@ function summarizeApartment({
     latestDealDate: latestTransaction?.deal_date ?? null,
     householdCount: basicInfo?.household_count ?? null,
     parkingPerHousehold,
-    floorAreaRatio: buildingInfo?.floor_area_ratio ?? null,
-    buildingCoverageRatio: buildingInfo?.building_coverage_ratio ?? null,
+    floorAreaRatio,
+    buildingCoverageRatio,
     gangnamMinutes,
     yeouidoMinutes,
     evidence,
@@ -292,10 +300,6 @@ function formatParkingPerHousehold(value: number) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })}대`;
-}
-
-function formatRatioPercent(value: number) {
-  return `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`;
 }
 
 function rankPriorityApartments(apartments: DashboardApartmentSummary[]) {

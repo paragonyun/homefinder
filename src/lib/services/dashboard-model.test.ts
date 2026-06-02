@@ -176,4 +176,38 @@ describe("buildDashboardModel", () => {
       expect.arrayContaining(["관심", "최근 거래 있음", "강남 31분", "1,000세대 이상"]),
     );
   });
+
+  it("does not surface zero building density values as usable evidence", () => {
+    const model = buildDashboardModel({
+      apartments: [
+        {
+          id: "apt-zero",
+          neighborhood_id: "gwanak",
+          name: "apt zero",
+          display_name: null,
+          address: null,
+          status: "candidate",
+          memo: null,
+        },
+      ],
+      basicInfos: [],
+      buildingInfos: [
+        {
+          apartment_id: "apt-zero",
+          floor_area_ratio: 0,
+          building_coverage_ratio: 0,
+          fetched_at: "2026-06-01T00:00:00.000Z",
+        },
+      ],
+      commuteTimes: [],
+      neighborhoods,
+      transactions: [],
+    });
+
+    expect(model.priorityApartments[0]).toMatchObject({
+      floorAreaRatio: null,
+      buildingCoverageRatio: null,
+    });
+    expect(model.priorityApartments[0].evidence.join(" ")).not.toContain("0%");
+  });
 });

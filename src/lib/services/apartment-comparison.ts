@@ -4,6 +4,7 @@ import {
   type CommuteSummary,
   type CommuteTimeLike,
 } from "./commute-summary";
+import { normalizeBuildingDensityRatio } from "./building-density";
 import {
   summarizeApartmentPrices,
   type PriceSummaryTransaction,
@@ -139,8 +140,12 @@ export function buildApartmentComparisonRows(
         basicInfo?.parking_count ?? null,
         basicInfo?.household_count ?? null,
       ),
-      floorAreaRatio: buildingInfo?.floor_area_ratio ?? null,
-      buildingCoverageRatio: buildingInfo?.building_coverage_ratio ?? null,
+      floorAreaRatio: normalizeBuildingDensityRatio(
+        buildingInfo?.floor_area_ratio,
+      ),
+      buildingCoverageRatio: normalizeBuildingDensityRatio(
+        buildingInfo?.building_coverage_ratio,
+      ),
       approvalDate: basicInfo?.approval_date ?? null,
       buildingAgeYears: getBuildingAgeYears(basicInfo?.approval_date ?? null),
       basicInfoFetchedAt: basicInfo?.fetched_at ?? null,

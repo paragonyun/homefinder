@@ -217,6 +217,39 @@ describe("buildApartmentComparisonRows", () => {
     });
   });
 
+  it("treats zero building density values as missing in comparison rows", () => {
+    const rows = buildApartmentComparisonRows(
+      [
+        {
+          id: "apt-1",
+          name: "apt",
+          display_name: null,
+          address: null,
+          lawd_cd: null,
+          status: "candidate",
+          memo: null,
+        },
+      ],
+      [],
+      [],
+      [],
+      [
+        {
+          apartment_id: "apt-1",
+          floor_area_ratio: 0,
+          building_coverage_ratio: 0,
+          fetched_at: "2026-06-01T10:00:00.000Z",
+        },
+      ],
+    );
+
+    expect(rows[0]).toMatchObject({
+      floorAreaRatio: null,
+      buildingCoverageRatio: null,
+      buildingInfoFetchedAt: "2026-06-01T10:00:00.000Z",
+    });
+  });
+
   it("merges commute times for Yeouido and Gangnam access comparison", () => {
     const rows = buildApartmentComparisonRows(
       [

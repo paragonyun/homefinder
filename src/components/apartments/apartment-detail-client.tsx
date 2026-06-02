@@ -13,6 +13,10 @@ import {
   type CommuteSummary,
 } from "@/lib/services/commute-summary";
 import {
+  formatBuildingDensityRatio,
+  normalizeBuildingDensityRatio,
+} from "@/lib/services/building-density";
+import {
   buildLatestFieldNoteSummary,
   getLatestFieldNoteByApartmentId,
 } from "@/lib/services/field-note-summary";
@@ -2103,13 +2107,16 @@ function formatBasicInfoSyncMessage(result: BasicInfoSyncResult) {
 }
 
 function formatBuildingInfoSyncMessage(result: BuildingInfoSyncResult) {
+  const floorAreaRatio = normalizeBuildingDensityRatio(result.floorAreaRatio);
+  const buildingCoverageRatio = normalizeBuildingDensityRatio(
+    result.buildingCoverageRatio,
+  );
   const ratios = [
-    result.floorAreaRatio !== null && result.floorAreaRatio !== undefined
-      ? `용적률 ${formatRatioPercent(result.floorAreaRatio)}`
+    floorAreaRatio !== null
+      ? `용적률 ${formatBuildingDensityRatio(floorAreaRatio)}`
       : null,
-    result.buildingCoverageRatio !== null &&
-    result.buildingCoverageRatio !== undefined
-      ? `건폐율 ${formatRatioPercent(result.buildingCoverageRatio)}`
+    buildingCoverageRatio !== null
+      ? `건폐율 ${formatBuildingDensityRatio(buildingCoverageRatio)}`
       : null,
   ].filter(Boolean);
   const prefix = ratios.length > 0 ? `${ratios.join(", ")}을` : "건축정보를";
@@ -2161,9 +2168,7 @@ function formatParkingPerHousehold(value: number | null) {
 }
 
 function formatRatioPercent(value: number | null) {
-  return value !== null
-    ? `${value.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`
-    : "-";
+  return formatBuildingDensityRatio(value);
 }
 
 function formatSquareMeters(value: number | null) {

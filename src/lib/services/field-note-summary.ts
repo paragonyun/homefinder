@@ -1,6 +1,13 @@
 export type FieldNoteSummaryInput = {
   apartment_id: string;
   visit_date: string | null;
+  station_walk_rating?: number | null;
+  slope_rating?: number | null;
+  complex_condition_rating?: number | null;
+  parking_rating?: number | null;
+  noise_rating?: number | null;
+  night_mood_rating?: number | null;
+  commercial_area_rating?: number | null;
   overall_rating: number | null;
   revisit_intention: string | null;
   overall_memo: string | null;

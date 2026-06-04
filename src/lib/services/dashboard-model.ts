@@ -3,6 +3,14 @@ import {
   formatBuildingDensityRatio,
   normalizeBuildingDensityRatio,
 } from "./building-density";
+import {
+  scoreApartmentCandidate,
+  type ApartmentScoreResult,
+} from "./apartment-scoring";
+import {
+  getLatestFieldNoteByApartmentId,
+  type FieldNoteSummaryInput,
+} from "./field-note-summary";
 
 export type DashboardNeighborhood = {
   id: string;
@@ -49,6 +57,8 @@ export type DashboardCommuteTime = {
   duration_minutes: number | null;
 };
 
+export type DashboardFieldNote = FieldNoteSummaryInput;
+
 export type DashboardModelInput = {
   neighborhoods: DashboardNeighborhood[];
   apartments: DashboardApartment[];
@@ -56,6 +66,7 @@ export type DashboardModelInput = {
   basicInfos?: DashboardBasicInfo[];
   buildingInfos?: DashboardBuildingInfo[];
   commuteTimes?: DashboardCommuteTime[];
+  fieldNotes?: DashboardFieldNote[];
 };
 
 export type DashboardApartmentSummary = {
@@ -71,6 +82,7 @@ export type DashboardApartmentSummary = {
   buildingCoverageRatio: number | null;
   gangnamMinutes: number | null;
   yeouidoMinutes: number | null;
+  score: ApartmentScoreResult;
   evidence: string[];
   missingBadges: string[];
 };
@@ -120,10 +132,14 @@ export function buildDashboardModel(input: DashboardModelInput): DashboardModel 
     input.buildingInfos ?? [],
   );
   const commuteByApartmentId = getCommuteByApartmentId(input.commuteTimes ?? []);
+  const latestFieldNoteByApartmentId = getLatestFieldNoteByApartmentId(
+    input.fieldNotes ?? [],
+  );
   const apartmentSummaries = input.apartments.map((apartment) =>
     summarizeApartment({
       apartment,
       commute: commuteByApartmentId.get(apartment.id) ?? emptyCommute(),
+      fieldNote: latestFieldNoteByApartmentId.get(apartment.id) ?? null,
       transactions: transactionsByApartmentId.get(apartment.id) ?? [],
       basicInfo: latestBasicInfoByApartmentId.get(apartment.id) ?? null,
       buildingInfo: latestBuildingInfoByApartmentId.get(apartment.id) ?? null,
@@ -217,12 +233,14 @@ function summarizeApartment({
   basicInfo,
   buildingInfo,
   commute,
+  fieldNote,
   transactions,
 }: {
   apartment: DashboardApartment;
   basicInfo: DashboardBasicInfo | null;
   buildingInfo: DashboardBuildingInfo | null;
   commute: ReturnType<typeof emptyCommute>;
+  fieldNote: DashboardFieldNote | null;
   transactions: DashboardTransaction[];
 }): DashboardApartmentSummary {
   const latestTransaction = [...transactions].sort((left, right) =>
@@ -241,6 +259,30 @@ function summarizeApartment({
   const buildingCoverageRatio = normalizeBuildingDensityRatio(
     buildingInfo?.building_coverage_ratio,
   );
+  const score = scoreApartmentCandidate({
+    latestPriceKrw,
+    commuteToYeouidoTransitMinutes: commute.yeouido_station.transit,
+    commuteToYeouidoDrivingMinutes: commute.yeouido_station.driving,
+    commuteToGangnamTransitMinutes: commute.gangnam_station.transit,
+    commuteToGangnamDrivingMinutes: commute.gangnam_station.driving,
+    householdCount: basicInfo?.household_count ?? null,
+    parkingPerHousehold,
+    buildingAgeYears: getBuildingAgeYears(basicInfo?.approval_date ?? null),
+    floorAreaRatio,
+    transactionCount: transactions.length,
+    fieldNote: fieldNote
+      ? {
+          overallRating: fieldNote.overall_rating,
+          stationWalkRating: fieldNote.station_walk_rating ?? null,
+          slopeRating: fieldNote.slope_rating ?? null,
+          parkingRating: fieldNote.parking_rating ?? null,
+          noiseRating: fieldNote.noise_rating ?? null,
+          nightMoodRating: fieldNote.night_mood_rating ?? null,
+          commercialAreaRating: fieldNote.commercial_area_rating ?? null,
+          revisitIntention: fieldNote.revisit_intention,
+        }
+      : null,
+  });
   const evidence = [
     apartment.status === "interested" ? "관심" : null,
     latestPriceKrw !== null ? "최근 거래 있음" : null,
@@ -275,6 +317,7 @@ function summarizeApartment({
     buildingCoverageRatio,
     gangnamMinutes,
     yeouidoMinutes,
+    score,
     evidence,
     missingBadges,
   };
@@ -311,45 +354,9 @@ function sortPriorityApartments(apartments: DashboardApartmentSummary[]) {
     .filter((apartment) => apartment.status !== "excluded")
     .sort(
       (left, right) =>
-        getPriorityScore(right) - getPriorityScore(left) ||
+        right.score.totalScore - left.score.totalScore ||
         left.name.localeCompare(right.name, "ko-KR"),
     );
-}
-
-function getPriorityScore(apartment: DashboardApartmentSummary) {
-  let score = 0;
-
-  if (apartment.status === "interested") {
-    score += 40;
-  } else if (apartment.status === "visit_planned") {
-    score += 32;
-  } else if (apartment.status === "candidate") {
-    score += 24;
-  }
-
-  if (apartment.latestPriceKrw !== null) {
-    score += 18;
-  }
-
-  const bestCommute = getBestCommute(apartment);
-
-  if (bestCommute !== null) {
-    score += Math.max(0, 24 - bestCommute / 3);
-  }
-
-  if ((apartment.householdCount ?? 0) >= 1000) {
-    score += 10;
-  }
-
-  return score;
-}
-
-function getBestCommute(apartment: DashboardApartmentSummary) {
-  const values = [apartment.gangnamMinutes, apartment.yeouidoMinutes].filter(
-    (value): value is number => value !== null,
-  );
-
-  return values.length > 0 ? Math.min(...values) : null;
 }
 
 function groupByApartmentId(transactions: DashboardTransaction[]) {
@@ -396,12 +403,16 @@ function getCommuteByApartmentId(commuteTimes: DashboardCommuteTime[]) {
   const byApartmentId = new Map<string, ReturnType<typeof emptyCommute>>();
 
   for (const commuteTime of commuteTimes) {
-    if (commuteTime.transport_type !== "transit") {
+    if (
+      commuteTime.transport_type !== "transit" &&
+      commuteTime.transport_type !== "driving"
+    ) {
       continue;
     }
 
     const current = byApartmentId.get(commuteTime.apartment_id) ?? emptyCommute();
-    current[commuteTime.destination_key].transit = commuteTime.duration_minutes;
+    current[commuteTime.destination_key][commuteTime.transport_type] =
+      commuteTime.duration_minutes;
     byApartmentId.set(commuteTime.apartment_id, current);
   }
 
@@ -412,11 +423,40 @@ function emptyCommute() {
   return {
     gangnam_station: {
       transit: null as number | null,
+      driving: null as number | null,
     },
     yeouido_station: {
       transit: null as number | null,
+      driving: null as number | null,
     },
   };
+}
+
+function getBuildingAgeYears(approvalDate: string | null, today = new Date()) {
+  if (!approvalDate) {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(approvalDate);
+
+  if (!match) {
+    return null;
+  }
+
+  const approvalYear = Number(match[1]);
+  const approvalMonth = Number(match[2]);
+  const approvalDay = Number(match[3]);
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+  const hasPassedAnniversary =
+    currentMonth > approvalMonth ||
+    (currentMonth === approvalMonth && currentDay >= approvalDay);
+
+  return Math.max(
+    0,
+    currentYear - approvalYear - (hasPassedAnniversary ? 0 : 1),
+  );
 }
 
 function formatPriceRange(values: number[]) {

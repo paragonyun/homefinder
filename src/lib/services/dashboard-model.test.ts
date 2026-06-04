@@ -5,6 +5,7 @@ import {
   type DashboardBasicInfo,
   type DashboardBuildingInfo,
   type DashboardCommuteTime,
+  type DashboardFieldNote,
   type DashboardNeighborhood,
   type DashboardTransaction,
 } from "./dashboard-model";
@@ -104,6 +105,29 @@ const commuteTimes: DashboardCommuteTime[] = [
     destination_key: "yeouido_station",
     transport_type: "transit",
     duration_minutes: 28,
+  },
+];
+
+const fieldNotes: DashboardFieldNote[] = [
+  {
+    apartment_id: "dong-a",
+    visit_date: "2026-06-01",
+    station_walk_rating: 5,
+    slope_rating: 5,
+    complex_condition_rating: 4,
+    parking_rating: 4,
+    noise_rating: 5,
+    night_mood_rating: 5,
+    commercial_area_rating: 4,
+    overall_rating: 5,
+    revisit_intention: "관심 유지",
+    overall_memo: null,
+    bad_points: null,
+    parking_note: null,
+    noise_note: null,
+    slope_note: null,
+    created_at: "2026-06-01T00:00:00.000Z",
+    updated_at: "2026-06-01T00:00:00.000Z",
   },
 ];
 
@@ -209,5 +233,24 @@ describe("buildDashboardModel", () => {
       buildingCoverageRatio: null,
     });
     expect(model.priorityApartments[0].evidence.join(" ")).not.toContain("0%");
+  });
+
+  it("scores priority apartments with field notes and missing data warnings", () => {
+    const model = buildDashboardModel({
+      apartments,
+      basicInfos,
+      buildingInfos,
+      commuteTimes,
+      fieldNotes,
+      neighborhoods,
+      transactions,
+    });
+
+    const scored = model.priorityApartments.find((item) => item.id === "dong-a");
+
+    expect(scored?.score.totalScore).toBeGreaterThan(30);
+    expect(scored?.score.categories.field.score).toBeGreaterThan(20);
+    expect(scored?.score.evidence).toContain("임장 긍정");
+    expect(scored?.score.warnings).toContain("가격 미확인");
   });
 });

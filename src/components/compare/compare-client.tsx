@@ -410,6 +410,7 @@ function ComparisonMatrix({
             <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3 font-semibold">
               단지
             </th>
+            <th className="px-4 py-3 font-semibold">종합점수</th>
             <th className="px-4 py-3 font-semibold">상태</th>
             <th className="px-4 py-3 font-semibold">최근 실거래가</th>
             <th className="px-4 py-3 font-semibold">평형대 요약</th>
@@ -438,6 +439,9 @@ function ComparisonMatrix({
                 <p className="mt-2 text-xs text-slate-400">
                   법정동코드 {row.lawdCd ?? "-"}
                 </p>
+              </td>
+              <td className="px-4 py-4 align-top">
+                <ScoreSummary row={row} />
               </td>
               <td className="px-4 py-4 align-top">
                 <StatusPill status={row.status} />
@@ -522,6 +526,10 @@ function ComparisonMatrix({
               <StatusPill status={row.status} />
             </div>
             <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 text-sm min-[380px]:grid-cols-2">
+              <MiniMetric
+                label="종합점수"
+                value={`${formatScore(row.score.totalScore)}점`}
+              />
               <MiniMetric
                 label="최근가"
                 value={
@@ -614,6 +622,37 @@ function BasicInfoSummary({
       {row.basicInfoFetchedAt ? (
         <p className="text-xs text-slate-500">
           갱신 {formatDate(row.basicInfoFetchedAt)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ScoreSummary({
+  row,
+}: Readonly<{
+  row: ReturnType<typeof buildApartmentComparisonRows>[number];
+}>) {
+  const categories = Object.values(row.score.categories);
+
+  return (
+    <div className="min-w-44">
+      <p className="text-lg font-semibold text-slate-950">
+        {formatScore(row.score.totalScore)}점
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {categories.map((category) => (
+          <span
+            key={category.label}
+            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600"
+          >
+            {category.label} {formatScore(category.score)}
+          </span>
+        ))}
+      </div>
+      {row.score.warnings.length > 0 ? (
+        <p className="mt-2 max-w-48 text-xs leading-5 text-amber-700">
+          {row.score.warnings.slice(0, 2).join(" · ")}
         </p>
       ) : null}
     </div>
@@ -722,6 +761,9 @@ function DataQuality({
       ) : (
         <QualityBadge tone="good" label="비교 가능" />
       )}
+      {row.score.warnings.slice(0, 3).map((warning) => (
+        <QualityBadge key={warning} tone="warn" label={warning} />
+      ))}
     </div>
   );
 }
@@ -884,6 +926,12 @@ function formatFieldNoteValue(
   ]
     .filter(Boolean)
     .join(" · ") || row.fieldNoteConclusion || "-";
+}
+
+function formatScore(value: number) {
+  return value.toLocaleString("ko-KR", {
+    maximumFractionDigits: 1,
+  });
 }
 
 function formatMeters(value: number) {

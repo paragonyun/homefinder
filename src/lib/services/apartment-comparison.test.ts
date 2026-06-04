@@ -76,6 +76,9 @@ describe("buildApartmentComparisonRows", () => {
         fieldNoteConclusion: null,
         fieldNoteRecheck: null,
         fieldNoteUpdatedAt: null,
+        score: expect.objectContaining({
+          totalScore: expect.any(Number),
+        }),
         commuteToYeouido: null,
         commuteToGangnam: null,
         driveToYeouido: null,
@@ -116,6 +119,9 @@ describe("buildApartmentComparisonRows", () => {
         fieldNoteConclusion: null,
         fieldNoteRecheck: null,
         fieldNoteUpdatedAt: null,
+        score: expect.objectContaining({
+          totalScore: expect.any(Number),
+        }),
         commuteToYeouido: null,
         commuteToGangnam: null,
         driveToYeouido: null,
@@ -379,5 +385,90 @@ describe("buildApartmentComparisonRows", () => {
       fieldNoteRecheck: "비 오는 날 경사 체감 다시 확인",
       fieldNoteUpdatedAt: "2026-06-02T11:00:00.000Z",
     });
+  });
+
+  it("adds apartment score breakdown to comparison rows", () => {
+    const rows = buildApartmentComparisonRows(
+      [
+        {
+          id: "apt-1",
+          name: "test apt",
+          display_name: null,
+          address: null,
+          lawd_cd: null,
+          status: "interested",
+          memo: null,
+        },
+      ],
+      [
+        {
+          apartment_id: "apt-1",
+          deal_date: "2026-05-01",
+          exclusive_area_m2: 84.9,
+          deal_amount_krw: 950_000_000,
+          cancel_yn: null,
+        },
+      ],
+      [
+        {
+          apartment_id: "apt-1",
+          household_count: 800,
+          building_count: 10,
+          parking_count: 900,
+          approval_date: "2004-01-01",
+          fetched_at: "2026-06-01T00:00:00.000Z",
+        },
+      ],
+      [
+        {
+          apartment_id: "apt-1",
+          destination_key: "yeouido_station",
+          destination_name: "여의도역",
+          transport_type: "transit",
+          duration_minutes: 28,
+          transfer_count: 1,
+          source_name: "tmap-transit",
+          source_ref: null,
+          query_datetime: null,
+          confidence_level: "high",
+          fetched_at: "2026-06-01T00:00:00.000Z",
+        },
+      ],
+      [
+        {
+          apartment_id: "apt-1",
+          floor_area_ratio: 230,
+          building_coverage_ratio: 18,
+          fetched_at: "2026-06-01T00:00:00.000Z",
+        },
+      ],
+      [
+        {
+          apartment_id: "apt-1",
+          visit_date: "2026-06-01",
+          overall_rating: 5,
+          station_walk_rating: 4,
+          slope_rating: 4,
+          complex_condition_rating: 4,
+          parking_rating: 4,
+          noise_rating: 5,
+          night_mood_rating: 5,
+          commercial_area_rating: 4,
+          revisit_intention: "관심 유지",
+          overall_memo: null,
+          bad_points: null,
+          parking_note: null,
+          noise_note: null,
+          slope_note: null,
+          created_at: "2026-06-01T00:00:00.000Z",
+          updated_at: "2026-06-01T00:00:00.000Z",
+        },
+      ],
+    );
+
+    expect(rows[0].score.totalScore).toBeGreaterThan(60);
+    expect(rows[0].score.categories.budget.maxScore).toBe(25);
+    expect(rows[0].score.categories.access.maxScore).toBe(20);
+    expect(rows[0].score.evidence).toContain("임장 긍정");
   });
 });

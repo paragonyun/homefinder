@@ -11,6 +11,7 @@ import {
   type DashboardBasicInfo,
   type DashboardBuildingInfo,
   type DashboardCommuteTime,
+  type DashboardFieldNote,
   type DashboardModel,
   type DashboardNeighborhood,
   type DashboardNeighborhoodSummary,
@@ -26,6 +27,7 @@ import type {
   ApartmentRowData,
   ApartmentTransactionRow,
   CommuteTimeRow,
+  FieldNoteRow,
   NeighborhoodRow,
 } from "@/lib/supabase/table-types";
 
@@ -183,8 +185,13 @@ export function DashboardClient() {
       return;
     }
 
-    const [transactionResult, basicInfoResult, buildingInfoResult, commuteResult] =
-      await Promise.all([
+    const [
+      transactionResult,
+      basicInfoResult,
+      buildingInfoResult,
+      commuteResult,
+      fieldNoteResult,
+    ] = await Promise.all([
         supabase
           .from("apartment_transactions")
           .select("apartment_id,deal_amount_krw,deal_date")
@@ -207,6 +214,12 @@ export function DashboardClient() {
             "apartment_id,destination_key,transport_type,duration_minutes",
           )
           .in("apartment_id", apartmentIds),
+        supabase
+          .from("field_notes")
+          .select(
+            "apartment_id,visit_date,station_walk_rating,slope_rating,complex_condition_rating,parking_rating,noise_rating,night_mood_rating,commercial_area_rating,overall_rating,revisit_intention,overall_memo,bad_points,parking_note,noise_note,slope_note,created_at,updated_at",
+          )
+          .in("apartment_id", apartmentIds),
       ]);
 
     const notices: string[] = [];
@@ -219,6 +232,9 @@ export function DashboardClient() {
     const commuteTimes = isMissingTableError(commuteResult.error)
       ? []
       : ((commuteResult.data ?? []) as CommuteTimeRow[]);
+    const fieldNotes = isMissingTableError(fieldNoteResult.error)
+      ? []
+      : ((fieldNoteResult.data ?? []) as FieldNoteRow[]);
 
     if (transactionResult.error) {
       notices.push(transactionResult.error.message);
@@ -239,6 +255,10 @@ export function DashboardClient() {
       notices.push(commuteResult.error.message);
     }
 
+    if (fieldNoteResult.error && !isMissingTableError(fieldNoteResult.error)) {
+      notices.push(fieldNoteResult.error.message);
+    }
+
     setMessage(notices.length > 0 ? notices.join(" / ") : null);
     setModel(
       buildDashboardModel({
@@ -246,6 +266,7 @@ export function DashboardClient() {
         basicInfos: basicInfos.map(toDashboardBasicInfo),
         buildingInfos: buildingInfos.map(toDashboardBuildingInfo),
         commuteTimes: commuteTimes.map(toDashboardCommuteTime),
+        fieldNotes: fieldNotes.map(toDashboardFieldNote),
         neighborhoods: ((neighborhoodRows ?? []) as NeighborhoodRow[]).map(
           toDashboardNeighborhood,
         ),
@@ -539,8 +560,12 @@ function PriorityApartmentList({
                 <StatusPill status={apartment.status} />
               </div>
               <EvidenceChips values={apartment.evidence} />
+              <ScoreBreakdown score={apartment.score} />
               {apartment.missingBadges.length > 0 ? (
                 <EvidenceChips values={apartment.missingBadges} tone="amber" />
+              ) : null}
+              {apartment.score.warnings.length > 0 ? (
+                <EvidenceChips values={apartment.score.warnings} tone="amber" />
               ) : null}
             </Link>
           ))}
@@ -552,6 +577,54 @@ function PriorityApartmentList({
       )}
     </aside>
   );
+}
+
+function ScoreBreakdown({
+  score,
+}: Readonly<{ score: DashboardModel["priorityApartments"][number]["score"] }>) {
+  const categories = Object.values(score.categories);
+
+  return (
+    <div className="mt-2 grid gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold text-slate-500">종합점수</span>
+        <span className="text-sm font-semibold text-slate-950">
+          {formatScore(score.totalScore)}점
+        </span>
+      </div>
+      <div className="grid gap-1.5">
+        {categories.map((category) => (
+          <div
+            key={category.label}
+            className="grid grid-cols-[52px_1fr_42px] items-center gap-2 text-xs"
+          >
+            <span className="font-semibold text-slate-500">
+              {category.label}
+            </span>
+            <span className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+              <span
+                className="block h-full rounded-full bg-blue-600"
+                style={{
+                  width: `${Math.round(
+                    (category.score / category.maxScore) * 100,
+                  )}%`,
+                }}
+              />
+            </span>
+            <span className="text-right font-semibold text-slate-700">
+              {formatScore(category.score)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatScore(value: number) {
+  return value.toLocaleString("ko-KR", {
+    maximumFractionDigits: 1,
+  });
 }
 
 function PortfolioMiniMetric({
@@ -653,6 +726,29 @@ function toDashboardCommuteTime(row: CommuteTimeRow): DashboardCommuteTime {
     destination_key: row.destination_key,
     transport_type: row.transport_type,
     duration_minutes: row.duration_minutes,
+  };
+}
+
+function toDashboardFieldNote(row: FieldNoteRow): DashboardFieldNote {
+  return {
+    apartment_id: row.apartment_id,
+    visit_date: row.visit_date,
+    station_walk_rating: row.station_walk_rating,
+    slope_rating: row.slope_rating,
+    complex_condition_rating: row.complex_condition_rating,
+    parking_rating: row.parking_rating,
+    noise_rating: row.noise_rating,
+    night_mood_rating: row.night_mood_rating,
+    commercial_area_rating: row.commercial_area_rating,
+    overall_rating: row.overall_rating,
+    revisit_intention: row.revisit_intention,
+    overall_memo: row.overall_memo,
+    bad_points: row.bad_points,
+    parking_note: row.parking_note,
+    noise_note: row.noise_note,
+    slope_note: row.slope_note,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 

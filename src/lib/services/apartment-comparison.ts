@@ -14,6 +14,10 @@ import {
   getLatestFieldNoteByApartmentId,
   type FieldNoteSummaryInput,
 } from "./field-note-summary";
+import {
+  scoreApartmentCandidate,
+  type ApartmentScoreResult,
+} from "./apartment-scoring";
 
 export type ComparisonApartment = {
   id: string;
@@ -75,6 +79,7 @@ export type ApartmentComparisonRow = {
   fieldNoteConclusion: string | null;
   fieldNoteRecheck: string | null;
   fieldNoteUpdatedAt: string | null;
+  score: ApartmentScoreResult;
   commuteToYeouido: CommuteSummary | null;
   commuteToGangnam: CommuteSummary | null;
   driveToYeouido: CommuteSummary | null;
@@ -120,7 +125,25 @@ export function buildApartmentComparisonRows(
     const fieldNoteSummary = buildLatestFieldNoteSummary(
       latestFieldNoteByApartmentId.get(apartment.id) ?? null,
     );
+    const latestFieldNote = latestFieldNoteByApartmentId.get(apartment.id) ?? null;
     const commuteSummary = commuteSummaryByApartmentId.get(apartment.id) ?? null;
+    const buildingAgeYears = getBuildingAgeYears(
+      basicInfo?.approval_date ?? null,
+    );
+    const parkingPerHousehold = getParkingPerHousehold(
+      basicInfo?.parking_count ?? null,
+      basicInfo?.household_count ?? null,
+    );
+    const floorAreaRatio = normalizeBuildingDensityRatio(
+      buildingInfo?.floor_area_ratio,
+    );
+    const buildingCoverageRatio = normalizeBuildingDensityRatio(
+      buildingInfo?.building_coverage_ratio,
+    );
+    const commuteToYeouido = commuteSummary?.yeouido_station.transit ?? null;
+    const commuteToGangnam = commuteSummary?.gangnam_station.transit ?? null;
+    const driveToYeouido = commuteSummary?.yeouido_station.driving ?? null;
+    const driveToGangnam = commuteSummary?.gangnam_station.driving ?? null;
 
     return {
       id: apartment.id,
@@ -136,18 +159,11 @@ export function buildApartmentComparisonRows(
       householdCount: basicInfo?.household_count ?? null,
       buildingCount: basicInfo?.building_count ?? null,
       parkingCount: basicInfo?.parking_count ?? null,
-      parkingPerHousehold: getParkingPerHousehold(
-        basicInfo?.parking_count ?? null,
-        basicInfo?.household_count ?? null,
-      ),
-      floorAreaRatio: normalizeBuildingDensityRatio(
-        buildingInfo?.floor_area_ratio,
-      ),
-      buildingCoverageRatio: normalizeBuildingDensityRatio(
-        buildingInfo?.building_coverage_ratio,
-      ),
+      parkingPerHousehold,
+      floorAreaRatio,
+      buildingCoverageRatio,
       approvalDate: basicInfo?.approval_date ?? null,
-      buildingAgeYears: getBuildingAgeYears(basicInfo?.approval_date ?? null),
+      buildingAgeYears,
       basicInfoFetchedAt: basicInfo?.fetched_at ?? null,
       buildingInfoFetchedAt: buildingInfo?.fetched_at ?? null,
       fieldNoteDate: fieldNoteSummary?.visitDate ?? null,
@@ -155,10 +171,35 @@ export function buildApartmentComparisonRows(
       fieldNoteConclusion: fieldNoteSummary?.conclusion ?? null,
       fieldNoteRecheck: fieldNoteSummary?.recheckText ?? null,
       fieldNoteUpdatedAt: fieldNoteSummary?.updatedAt ?? null,
-      commuteToYeouido: commuteSummary?.yeouido_station.transit ?? null,
-      commuteToGangnam: commuteSummary?.gangnam_station.transit ?? null,
-      driveToYeouido: commuteSummary?.yeouido_station.driving ?? null,
-      driveToGangnam: commuteSummary?.gangnam_station.driving ?? null,
+      score: scoreApartmentCandidate({
+        latestPriceKrw: latestSummary?.latestPriceKrw ?? null,
+        commuteToYeouidoTransitMinutes: commuteToYeouido?.durationMinutes ?? null,
+        commuteToGangnamTransitMinutes: commuteToGangnam?.durationMinutes ?? null,
+        commuteToYeouidoDrivingMinutes: driveToYeouido?.durationMinutes ?? null,
+        commuteToGangnamDrivingMinutes: driveToGangnam?.durationMinutes ?? null,
+        householdCount: basicInfo?.household_count ?? null,
+        parkingPerHousehold,
+        buildingAgeYears,
+        floorAreaRatio,
+        transactionCount,
+        fieldNote: latestFieldNote
+          ? {
+              overallRating: latestFieldNote.overall_rating,
+              stationWalkRating: latestFieldNote.station_walk_rating ?? null,
+              slopeRating: latestFieldNote.slope_rating ?? null,
+              parkingRating: latestFieldNote.parking_rating ?? null,
+              noiseRating: latestFieldNote.noise_rating ?? null,
+              nightMoodRating: latestFieldNote.night_mood_rating ?? null,
+              commercialAreaRating:
+                latestFieldNote.commercial_area_rating ?? null,
+              revisitIntention: latestFieldNote.revisit_intention,
+            }
+          : null,
+      }),
+      commuteToYeouido,
+      commuteToGangnam,
+      driveToYeouido,
+      driveToGangnam,
       areaSummaries: priceSummary.areaSummaries.map((summary) => ({
         areaBucket: summary.areaBucket,
         latestDealDate: summary.latestDealDate,

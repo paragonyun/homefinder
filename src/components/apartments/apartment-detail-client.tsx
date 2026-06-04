@@ -20,6 +20,7 @@ import {
   buildLatestFieldNoteSummary,
   getLatestFieldNoteByApartmentId,
 } from "@/lib/services/field-note-summary";
+import { scoreApartmentCandidate } from "@/lib/services/apartment-scoring";
 import {
   formatCommuteRefreshMessage,
   type CommuteRefreshResult,
@@ -681,6 +682,52 @@ export function ApartmentDetailClient({
     basicInfo?.parking_count ?? null,
     basicInfo?.household_count ?? null,
   );
+  const apartmentScore = useMemo(
+    () =>
+      scoreApartmentCandidate({
+        latestPriceKrw: latestSummary?.latestPriceKrw ?? null,
+        commuteToYeouidoTransitMinutes:
+          commuteAccessSummary?.yeouido_station.transit?.durationMinutes ??
+          null,
+        commuteToYeouidoDrivingMinutes:
+          commuteAccessSummary?.yeouido_station.driving?.durationMinutes ??
+          null,
+        commuteToGangnamTransitMinutes:
+          commuteAccessSummary?.gangnam_station.transit?.durationMinutes ??
+          null,
+        commuteToGangnamDrivingMinutes:
+          commuteAccessSummary?.gangnam_station.driving?.durationMinutes ??
+          null,
+        householdCount: basicInfo?.household_count ?? null,
+        parkingPerHousehold,
+        buildingAgeYears: getBuildingAgeYears(basicInfo?.approval_date ?? null),
+        floorAreaRatio: normalizeBuildingDensityRatio(
+          buildingInfo?.floor_area_ratio,
+        ),
+        transactionCount: totalTransactionCount,
+        fieldNote: latestFieldNote
+          ? {
+              overallRating: latestFieldNote.overall_rating,
+              stationWalkRating: latestFieldNote.station_walk_rating,
+              slopeRating: latestFieldNote.slope_rating,
+              parkingRating: latestFieldNote.parking_rating,
+              noiseRating: latestFieldNote.noise_rating,
+              nightMoodRating: latestFieldNote.night_mood_rating,
+              commercialAreaRating: latestFieldNote.commercial_area_rating,
+              revisitIntention: latestFieldNote.revisit_intention,
+            }
+          : null,
+      }),
+    [
+      basicInfo,
+      buildingInfo,
+      commuteAccessSummary,
+      latestFieldNote,
+      latestSummary,
+      parkingPerHousehold,
+      totalTransactionCount,
+    ],
+  );
   const latestFieldNoteSummary = useMemo(
     () => buildLatestFieldNoteSummary(latestFieldNote),
     [latestFieldNote],
@@ -736,6 +783,11 @@ export function ApartmentDetailClient({
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+            <HeroMetric
+              label="종합점수"
+              value={`${formatScore(apartmentScore.totalScore)}점`}
+              detail="자금·접근성·단지·임장"
+            />
             <HeroMetric
               label="최근 실거래가"
               value={
@@ -809,6 +861,8 @@ export function ApartmentDetailClient({
               detail="최근 K-apt 반영"
             />
           </div>
+
+          <ScoreBreakdownPanel score={apartmentScore} />
         </div>
       </section>
 
@@ -1785,6 +1839,76 @@ function SyncStatusPanel({
   );
 }
 
+function ScoreBreakdownPanel({
+  score,
+}: Readonly<{ score: ReturnType<typeof scoreApartmentCandidate> }>) {
+  const categories = Object.values(score.categories);
+
+  return (
+    <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-950">
+            점수 상세
+          </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            100점 기준으로 자금, 접근성, 단지 체급, 거래 안정성, 임장 기록을
+            합산합니다.
+          </p>
+        </div>
+        <p className="text-2xl font-semibold text-slate-950">
+          {formatScore(score.totalScore)}점
+        </p>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-5">
+        {categories.map((category) => (
+          <div
+            key={category.label}
+            className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-slate-500">
+                {category.label}
+              </p>
+              <p className="text-sm font-semibold text-slate-950">
+                {formatScore(category.score)}
+              </p>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full rounded-full bg-blue-700"
+                style={{
+                  width: `${Math.round(
+                    (category.score / category.maxScore) * 100,
+                  )}%`,
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {score.evidence.slice(0, 6).map((item) => (
+          <span
+            key={item}
+            className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800"
+          >
+            {item}
+          </span>
+        ))}
+        {score.warnings.map((item) => (
+          <span
+            key={item}
+            className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800"
+          >
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PriceTrendLineChart({
   lines,
   months,
@@ -2249,6 +2373,39 @@ function formatParkingPerHousehold(value: number | null) {
         minimumFractionDigits: 2,
       })}대`
     : "-";
+}
+
+function formatScore(value: number) {
+  return value.toLocaleString("ko-KR", {
+    maximumFractionDigits: 1,
+  });
+}
+
+function getBuildingAgeYears(approvalDate: string | null, today = new Date()) {
+  if (!approvalDate) {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(approvalDate);
+
+  if (!match) {
+    return null;
+  }
+
+  const approvalYear = Number(match[1]);
+  const approvalMonth = Number(match[2]);
+  const approvalDay = Number(match[3]);
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+  const hasPassedAnniversary =
+    currentMonth > approvalMonth ||
+    (currentMonth === approvalMonth && currentDay >= approvalDay);
+
+  return Math.max(
+    0,
+    currentYear - approvalYear - (hasPassedAnniversary ? 0 : 1),
+  );
 }
 
 function formatRatioPercent(value: number | null) {

@@ -5,6 +5,9 @@ import {
   getComparisonMetrics,
   hasCommuteInfo,
 } from "./comparison-view";
+import { scoreApartmentCandidate } from "./apartment-scoring";
+
+const defaultScore = scoreApartmentCandidate({});
 
 const rows: ApartmentComparisonRow[] = [
   {
@@ -33,6 +36,7 @@ const rows: ApartmentComparisonRow[] = [
     fieldNoteConclusion: "관심 유지",
     fieldNoteRecheck: "야간 소음 재확인",
     fieldNoteUpdatedAt: "2026-06-01T10:00:00Z",
+    score: defaultScore,
     commuteToYeouido: {
       destinationKey: "yeouido_station",
       destinationName: "여의도역",
@@ -82,6 +86,7 @@ const rows: ApartmentComparisonRow[] = [
     fieldNoteConclusion: null,
     fieldNoteRecheck: null,
     fieldNoteUpdatedAt: null,
+    score: defaultScore,
     commuteToYeouido: null,
     commuteToGangnam: null,
     driveToYeouido: null,

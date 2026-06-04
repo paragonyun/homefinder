@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMonthWindow,
   buildMonthlyPriceTrendLines,
   filterTransactionsByMonth,
+  getCurrentMonthKey,
   getLatestTransactionMonth,
+  getRecentTransactions,
   summarizeApartmentPrices,
   summarizeMonthlyTrendWindow,
 } from "./price-summary";
@@ -98,6 +101,20 @@ describe("summarizeApartmentPrices", () => {
         transactionCount: 1,
       },
     ]);
+  });
+
+  it("uses a numeric bucket for non-standard exclusive areas", () => {
+    const summary = summarizeApartmentPrices([
+      {
+        deal_date: "2026-05-22",
+        exclusive_area_m2: 32.8,
+        deal_amount_krw: 740_000_000,
+        cancel_yn: null,
+      },
+    ]);
+
+    expect(summary.areaSummaries[0]?.areaBucket).toBe("33");
+    expect(summary.monthlyTrend[0]?.areaBucket).toBe("33");
   });
 
   it("builds recent monthly trend lines without dropping area buckets", () => {
@@ -196,6 +213,52 @@ describe("summarizeApartmentPrices", () => {
     ]);
   });
 
+  it("filters monthly trend lines to a calendar window ending at the current month", () => {
+    const lines = buildMonthlyPriceTrendLines(
+      [
+        {
+          month: "2025-06",
+          areaBucket: "84",
+          averagePriceKrw: 1_100_000_000,
+          transactionCount: 1,
+        },
+        {
+          month: "2025-07",
+          areaBucket: "84",
+          averagePriceKrw: 1_120_000_000,
+          transactionCount: 1,
+        },
+        {
+          month: "2026-05",
+          areaBucket: "84",
+          averagePriceKrw: 1_300_000_000,
+          transactionCount: 1,
+        },
+      ],
+      12,
+      { endMonth: "2026-06" },
+    );
+
+    expect(lines[0]?.points.map((point) => point.month)).toEqual([
+      "2025-07",
+      "2026-05",
+    ]);
+    expect(buildMonthWindow("2026-06", 12)).toEqual([
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+    ]);
+  });
+
   it("filters table transactions to the latest deal month while preserving chart history", () => {
     const transactions = [
       {
@@ -242,6 +305,40 @@ describe("summarizeApartmentPrices", () => {
         transactionCount: 1,
       },
     ]);
+  });
+
+  it("returns the latest ten transactions for the detail table", () => {
+    const transactions = Array.from({ length: 12 }, (_item, index) => {
+      const day = String(index + 1).padStart(2, "0");
+
+      return {
+        deal_date: `2026-05-${day}`,
+        exclusive_area_m2: 84.96,
+        deal_amount_krw: 1_000_000_000 + index,
+        cancel_yn: null,
+      };
+    });
+
+    expect(
+      getRecentTransactions(transactions, 10).map((item) => item.deal_date),
+    ).toEqual([
+      "2026-05-12",
+      "2026-05-11",
+      "2026-05-10",
+      "2026-05-09",
+      "2026-05-08",
+      "2026-05-07",
+      "2026-05-06",
+      "2026-05-05",
+      "2026-05-04",
+      "2026-05-03",
+    ]);
+  });
+
+  it("formats the current calendar month from the provided date", () => {
+    expect(getCurrentMonthKey(new Date("2026-06-04T09:00:00+09:00"))).toBe(
+      "2026-06",
+    );
   });
 
   it("summarizes the visible trend window with weighted monthly averages", () => {

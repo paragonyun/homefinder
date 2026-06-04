@@ -36,9 +36,10 @@ import {
   getVisibleMonthLabels,
 } from "@/lib/services/chart-scale";
 import {
+  buildMonthWindow,
   buildMonthlyPriceTrendLines,
-  filterTransactionsByMonth,
-  getLatestTransactionMonth,
+  getCurrentMonthKey,
+  getRecentTransactions,
   summarizeApartmentPrices,
   summarizeMonthlyTrendWindow,
   type MonthlyPriceTrendLine,
@@ -652,17 +653,18 @@ export function ApartmentDetailClient({
     () => summarizeApartmentPrices(transactions),
     [transactions],
   );
+  const currentMonth = useMemo(() => getCurrentMonthKey(), []);
+  const chartMonths = useMemo(() => buildMonthWindow(currentMonth, 12), [currentMonth]);
   const trendLines = useMemo(
-    () => buildMonthlyPriceTrendLines(priceSummary.monthlyTrend),
-    [priceSummary.monthlyTrend],
+    () =>
+      buildMonthlyPriceTrendLines(priceSummary.monthlyTrend, 12, {
+        endMonth: currentMonth,
+      }),
+    [currentMonth, priceSummary.monthlyTrend],
   );
-  const latestTransactionMonth = useMemo(
-    () => getLatestTransactionMonth(transactions),
+  const recentTransactions = useMemo(
+    () => getRecentTransactions(transactions, 10),
     [transactions],
-  );
-  const latestMonthTransactions = useMemo(
-    () => filterTransactionsByMonth(transactions, latestTransactionMonth),
-    [latestTransactionMonth, transactions],
   );
   const latestSummary = priceSummary.areaSummaries[0] ?? null;
   const commuteAccessSummary = useMemo(
@@ -1011,7 +1013,7 @@ export function ApartmentDetailClient({
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               국토부 아파트 매매 실거래가 상세 자료를 최근 12개월까지 조회해
-              차트에 반영하고, 아래 거래 표는 최신 거래월만 표시합니다.
+              차트는 현재월까지 반영하고, 아래 거래 표는 최신 계약 10건만 표시합니다.
             </p>
             <p className="mt-1 text-sm text-slate-500">
               법정동코드: {apartment?.lawd_cd ?? "미입력"}
@@ -1122,7 +1124,7 @@ export function ApartmentDetailClient({
                     </span>
                   ) : null}
                 </div>
-                <PriceTrendLineChart lines={trendLines} />
+                <PriceTrendLineChart lines={trendLines} months={chartMonths} />
               </div>
             ) : null}
 
@@ -1130,14 +1132,14 @@ export function ApartmentDetailClient({
               <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-950">
-                    최신 거래월 상세
+                    최근 거래 상세
                   </h3>
                   <p className="mt-1 text-xs text-slate-500">
-                    {latestTransactionMonth
-                      ? `${latestTransactionMonth} 거래 ${latestMonthTransactions.length.toLocaleString(
+                    {recentTransactions.length > 0
+                      ? `최신 계약일 기준 ${recentTransactions.length.toLocaleString(
                           "ko-KR",
-                        )}건만 표시합니다.`
-                      : "표시할 최신 거래월이 없습니다."}
+                        )}건을 표시합니다.`
+                      : "표시할 최근 거래가 없습니다."}
                   </p>
                 </div>
                 <span className="w-fit rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
@@ -1156,7 +1158,7 @@ export function ApartmentDetailClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {latestMonthTransactions.map((transaction) => (
+                  {recentTransactions.map((transaction) => (
                     <tr
                       key={transaction.id}
                       className="border-b border-slate-200 last:border-0"
@@ -1785,7 +1787,8 @@ function SyncStatusPanel({
 
 function PriceTrendLineChart({
   lines,
-}: Readonly<{ lines: MonthlyPriceTrendLine[] }>) {
+  months,
+}: Readonly<{ lines: MonthlyPriceTrendLine[]; months: string[] }>) {
   const [hiddenAreaBuckets, setHiddenAreaBuckets] = useState<string[]>([]);
   const availableAreaBuckets = new Set(lines.map((line) => line.areaBucket));
   const effectiveHiddenAreaBuckets = hiddenAreaBuckets.filter((areaBucket) =>
@@ -1809,7 +1812,6 @@ function PriceTrendLineChart({
     );
   }
 
-  const months = Array.from(new Set(chartPoints.map((point) => point.month))).sort();
   const prices = chartPoints.map((point) => point.averagePriceKrw);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
@@ -1839,9 +1841,11 @@ function PriceTrendLineChart({
       return width / 2;
     }
 
+    const monthIndex = Math.max(0, months.indexOf(month));
+
     return (
       paddingLeft +
-      (months.indexOf(month) / (months.length - 1)) *
+      (monthIndex / (months.length - 1)) *
         (width - paddingLeft - paddingRight)
     );
   };

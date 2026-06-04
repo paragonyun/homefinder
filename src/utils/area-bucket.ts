@@ -7,5 +7,7 @@ export function getAreaBucket(exclusiveAreaM2: number) {
       : best;
   }, standardBuckets[0]);
 
-  return Math.abs(closest - exclusiveAreaM2) <= 3 ? String(closest) : "custom";
+  return Math.abs(closest - exclusiveAreaM2) <= 3
+    ? String(closest)
+    : String(Math.round(exclusiveAreaM2));
 }

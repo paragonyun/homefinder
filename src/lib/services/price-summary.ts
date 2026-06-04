@@ -73,12 +73,13 @@ export function summarizeApartmentPrices(
 export function buildMonthlyPriceTrendLines(
   monthlyTrend: MonthlyPriceTrend[],
   maxMonths = 12,
+  options: { endMonth?: string } = {},
 ): MonthlyPriceTrendLine[] {
-  const recentMonths = Array.from(
-    new Set(monthlyTrend.map((point) => point.month)),
-  )
-    .sort()
-    .slice(-maxMonths);
+  const recentMonths = options.endMonth
+    ? buildMonthWindow(options.endMonth, maxMonths)
+    : Array.from(new Set(monthlyTrend.map((point) => point.month)))
+        .sort()
+        .slice(-maxMonths);
   const recentMonthSet = new Set(recentMonths);
 
   return Array.from(
@@ -110,6 +111,28 @@ export function buildMonthlyPriceTrendLines(
     .sort((left, right) => compareAreaBucket(left.areaBucket, right.areaBucket));
 }
 
+export function buildMonthWindow(endMonth: string, monthCount = 12) {
+  if (!isYearMonth(endMonth) || monthCount <= 0) {
+    return [];
+  }
+
+  const [year, month] = endMonth.split("-").map(Number);
+  const endMonthIndex = year * 12 + (month - 1);
+  const normalizedMonthCount = Math.floor(monthCount);
+
+  return Array.from({ length: normalizedMonthCount }, (_item, index) => {
+    const monthIndex = endMonthIndex - normalizedMonthCount + 1 + index;
+    const displayYear = Math.floor(monthIndex / 12);
+    const displayMonth = (monthIndex % 12) + 1;
+
+    return `${displayYear}-${String(displayMonth).padStart(2, "0")}`;
+  });
+}
+
+export function getCurrentMonthKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function getLatestTransactionMonth(
   transactions: PriceSummaryTransaction[],
 ) {
@@ -135,6 +158,19 @@ export function filterTransactionsByMonth<T extends PriceSummaryTransaction>(
   return transactions.filter(
     (transaction) => getTransactionMonth(transaction) === month,
   );
+}
+
+export function getRecentTransactions<T extends PriceSummaryTransaction>(
+  transactions: T[],
+  limit = 10,
+) {
+  const normalizedLimit = Math.max(0, Math.floor(limit));
+
+  return [...transactions]
+    .sort((left, right) =>
+      getTransactionDateKey(right).localeCompare(getTransactionDateKey(left)),
+    )
+    .slice(0, normalizedLimit);
 }
 
 export function summarizeMonthlyTrendWindow(
@@ -217,6 +253,16 @@ function getTransactionMonth(transaction: PriceSummaryTransaction) {
   return /^\d{4}-\d{2}/.test(transaction.deal_date)
     ? transaction.deal_date.slice(0, 7)
     : null;
+}
+
+function getTransactionDateKey(transaction: PriceSummaryTransaction) {
+  return /^\d{4}-\d{2}-\d{2}/.test(transaction.deal_date)
+    ? transaction.deal_date.slice(0, 10)
+    : "";
+}
+
+function isYearMonth(value: string) {
+  return /^\d{4}-\d{2}$/.test(value);
 }
 
 function summarizeByArea(transactions: NormalizedTransaction[]) {

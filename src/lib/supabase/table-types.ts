@@ -208,3 +208,19 @@ export type FieldNoteRow = {
   created_at: string;
   updated_at: string;
 };
+
+export type FieldNotePhotoRow = {
+  id: string;
+  user_id: string;
+  apartment_id: string;
+  field_note_id: string;
+  storage_bucket: string;
+  storage_path: string;
+  original_file_name: string | null;
+  content_type: string | null;
+  file_size_bytes: number | null;
+  sort_order: number;
+  caption: string | null;
+  created_at: string;
+  updated_at: string;
+};

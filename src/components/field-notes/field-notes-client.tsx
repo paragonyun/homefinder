@@ -1,14 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { validateFieldNoteInput } from "@/lib/forms/home-data";
 import {
+  FIELD_NOTE_PHOTO_BUCKET,
+  buildFieldNotePhotoStoragePath,
+  validateFieldNotePhotoFiles,
+} from "@/lib/services/field-note-photos";
+import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
-import type { FieldNoteRow } from "@/lib/supabase/table-types";
+import type {
+  FieldNotePhotoRow,
+  FieldNoteRow,
+} from "@/lib/supabase/table-types";
 import { formatDate } from "@/utils/date";
 
 type FieldNotesClientProps = {
@@ -38,6 +46,16 @@ type FieldNoteFormState = {
   noiseNote: string;
   slopeNote: string;
   overallMemo: string;
+};
+
+type FieldNotePhotoPreview = {
+  id: string;
+  name: string;
+  url: string;
+};
+
+type FieldNotePhotoDisplay = FieldNotePhotoRow & {
+  signedUrl: string | null;
 };
 
 const emptyForm: FieldNoteFormState = {
@@ -86,7 +104,16 @@ export function FieldNotesClient({
 }: Readonly<FieldNotesClientProps>) {
   const [session, setSession] = useState<Session | null>(null);
   const [notes, setNotes] = useState<FieldNoteRow[]>([]);
+  const [photoRowsByNoteId, setPhotoRowsByNoteId] = useState<
+    Record<string, FieldNotePhotoDisplay[]>
+  >({});
   const [form, setForm] = useState<FieldNoteFormState>(emptyForm);
+  const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
+  const [selectedPhotoPreviews, setSelectedPhotoPreviews] = useState<
+    FieldNotePhotoPreview[]
+  >([]);
+  const selectedPhotoPreviewUrlsRef = useRef<string[]>([]);
+  const [photoInputResetKey, setPhotoInputResetKey] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
@@ -98,6 +125,113 @@ export function FieldNotesClient({
       [field]: value,
     }));
   }
+
+  function handlePhotoSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const nextPhotos = Array.from(event.target.files ?? []);
+    const validated = validateFieldNotePhotoFiles(nextPhotos);
+
+    if (!validated.ok) {
+      setMessage(validated.error);
+      event.target.value = "";
+      return;
+    }
+
+    replaceSelectedPhotos(validated.value);
+    setMessage(null);
+  }
+
+  function replaceSelectedPhotos(nextPhotos: File[]) {
+    selectedPhotoPreviewUrlsRef.current.forEach((url) =>
+      URL.revokeObjectURL(url),
+    );
+
+    const nextPreviews = nextPhotos.map((file, index) => ({
+      id: `${file.name}-${file.lastModified}-${index}`,
+      name: file.name,
+      url: URL.createObjectURL(file),
+    }));
+
+    selectedPhotoPreviewUrlsRef.current = nextPreviews.map(
+      (preview) => preview.url,
+    );
+    setSelectedPhotos(nextPhotos);
+    setSelectedPhotoPreviews(nextPreviews);
+  }
+
+  function clearSelectedPhotos() {
+    replaceSelectedPhotos([]);
+    setPhotoInputResetKey((current) => current + 1);
+  }
+
+  function removeSelectedPhoto(photoIndex: number) {
+    replaceSelectedPhotos(
+      selectedPhotos.filter((_, index) => index !== photoIndex),
+    );
+    setPhotoInputResetKey((current) => current + 1);
+  }
+
+  useEffect(() => {
+    return () => {
+      selectedPhotoPreviewUrlsRef.current.forEach((url) =>
+        URL.revokeObjectURL(url),
+      );
+    };
+  }, []);
+
+  const loadFieldNotePhotos = useCallback(async (nextNotes: FieldNoteRow[]) => {
+    if (!supabase || nextNotes.length === 0) {
+      setPhotoRowsByNoteId({});
+      return;
+    }
+
+    const noteIds = nextNotes.map((note) => note.id);
+    const { data, error } = await supabase
+      .from("field_note_photos")
+      .select("*")
+      .eq("apartment_id", apartmentId)
+      .in("field_note_id", noteIds)
+      .order("sort_order", { ascending: true });
+
+    if (error) {
+      if (!isMissingTableError(error)) {
+        setMessage(error.message);
+      }
+
+      setPhotoRowsByNoteId({});
+      return;
+    }
+
+    const photoRows = (data ?? []) as FieldNotePhotoRow[];
+    const paths = photoRows.map((photo) => photo.storage_path);
+    const signedUrls =
+      paths.length > 0
+        ? await supabase.storage
+            .from(FIELD_NOTE_PHOTO_BUCKET)
+            .createSignedUrls(paths, 60 * 60)
+        : null;
+
+    const signedUrlByPath = new Map<string, string | null>();
+    photoRows.forEach((photo, index) => {
+      signedUrlByPath.set(
+        photo.storage_path,
+        signedUrls?.data?.[index]?.signedUrl ?? null,
+      );
+    });
+
+    const nextPhotoRowsByNoteId = photoRows.reduce<
+      Record<string, FieldNotePhotoDisplay[]>
+    >((accumulator, photo) => {
+      const photos = accumulator[photo.field_note_id] ?? [];
+      photos.push({
+        ...photo,
+        signedUrl: signedUrlByPath.get(photo.storage_path) ?? null,
+      });
+      accumulator[photo.field_note_id] = photos;
+      return accumulator;
+    }, {});
+
+    setPhotoRowsByNoteId(nextPhotoRowsByNoteId);
+  }, [apartmentId, supabase]);
 
   const loadNotes = useCallback(async () => {
     if (!supabase || isMockApartment) {
@@ -114,12 +248,15 @@ export function FieldNotesClient({
 
     if (error) {
       setMessage(error.message);
+      setPhotoRowsByNoteId({});
     } else {
-      setNotes((data ?? []) as FieldNoteRow[]);
+      const nextNotes = (data ?? []) as FieldNoteRow[];
+      setNotes(nextNotes);
+      await loadFieldNotePhotos(nextNotes);
     }
 
     setIsLoading(false);
-  }, [apartmentId, isMockApartment, supabase]);
+  }, [apartmentId, isMockApartment, loadFieldNotePhotos, supabase]);
 
   useEffect(() => {
     if (!supabase) {
@@ -176,19 +313,114 @@ export function FieldNotesClient({
       return;
     }
 
-    setIsLoading(true);
-    const { error } = await supabase.from("field_notes").insert(validated.value);
+    const photoValidation = validateFieldNotePhotoFiles(selectedPhotos);
 
-    if (error) {
-      setMessage(error.message);
-    } else {
-      setForm(emptyForm);
-      await loadNotes();
-      await onNotesChanged?.();
-      setMessage("임장 메모를 저장했습니다.");
+    if (!photoValidation.ok) {
+      setMessage(photoValidation.error);
+      return;
     }
 
-    setIsLoading(false);
+    setIsLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("field_notes")
+        .insert(validated.value)
+        .select("id")
+        .single();
+
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      const savedNoteId = (data as { id: string }).id;
+
+      if (photoValidation.value.length > 0) {
+        const photoResult = await uploadFieldNotePhotos(savedNoteId, photoValidation.value);
+
+        if (!photoResult.ok) {
+          setForm(emptyForm);
+          clearSelectedPhotos();
+          await loadNotes();
+          await onNotesChanged?.();
+          setMessage(`임장 메모는 저장했지만 사진 업로드에 실패했습니다. ${photoResult.error}`);
+          return;
+        }
+      }
+
+      setForm(emptyForm);
+      clearSelectedPhotos();
+      await loadNotes();
+      await onNotesChanged?.();
+      setMessage(
+        photoValidation.value.length > 0
+          ? "임장 메모와 사진을 저장했습니다."
+          : "임장 메모를 저장했습니다.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function uploadFieldNotePhotos(fieldNoteId: string, photos: File[]) {
+    if (!supabase || !session) {
+      return { ok: false as const, error: "로그인 세션이 필요합니다." };
+    }
+
+    const uploadedAt = new Date();
+    const uploadedPaths: string[] = [];
+
+    for (const [index, photo] of photos.entries()) {
+      const storagePath = buildFieldNotePhotoStoragePath({
+        userId: session.user.id,
+        fieldNoteId,
+        fileName: photo.name,
+        mimeType: photo.type,
+        index,
+        uploadedAt,
+      });
+      const { error } = await supabase.storage
+        .from(FIELD_NOTE_PHOTO_BUCKET)
+        .upload(storagePath, photo, {
+          cacheControl: "3600",
+          contentType: photo.type,
+          upsert: false,
+        });
+
+      if (error) {
+        if (uploadedPaths.length > 0) {
+          await supabase.storage
+            .from(FIELD_NOTE_PHOTO_BUCKET)
+            .remove(uploadedPaths);
+        }
+
+        return { ok: false as const, error: error.message };
+      }
+
+      uploadedPaths.push(storagePath);
+    }
+
+    const { error } = await supabase.from("field_note_photos").insert(
+      photos.map((photo, index) => ({
+        user_id: session.user.id,
+        apartment_id: apartmentId,
+        field_note_id: fieldNoteId,
+        storage_bucket: FIELD_NOTE_PHOTO_BUCKET,
+        storage_path: uploadedPaths[index],
+        original_file_name: photo.name,
+        content_type: photo.type,
+        file_size_bytes: photo.size,
+        sort_order: index,
+      })),
+    );
+
+    if (error) {
+      await supabase.storage.from(FIELD_NOTE_PHOTO_BUCKET).remove(uploadedPaths);
+      return { ok: false as const, error: error.message };
+    }
+
+    return { ok: true as const };
   }
 
   async function handleDelete(id: string) {
@@ -197,11 +429,26 @@ export function FieldNotesClient({
     }
 
     setIsLoading(true);
+    const photos = photoRowsByNoteId[id] ?? [];
     const { error } = await supabase.from("field_notes").delete().eq("id", id);
 
     if (error) {
       setMessage(error.message);
     } else {
+      if (photos.length > 0) {
+        const { error: photoDeleteError } = await supabase.storage
+          .from(FIELD_NOTE_PHOTO_BUCKET)
+          .remove(photos.map((photo) => photo.storage_path));
+
+        if (photoDeleteError) {
+          await loadNotes();
+          await onNotesChanged?.();
+          setMessage(`임장 메모는 삭제했지만 사진 파일 정리에 실패했습니다. ${photoDeleteError.message}`);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       await loadNotes();
       await onNotesChanged?.();
       setMessage("임장 메모를 삭제했습니다.");
@@ -408,6 +655,57 @@ export function FieldNotesClient({
               placeholder="다음 방문이나 매수 검토 전에 다시 확인할 점"
             />
           </label>
+          <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">임장 사진</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  JPG, PNG, WEBP, HEIC 형식으로 최대 6장까지 저장합니다.
+                </p>
+              </div>
+              <span className="w-fit rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
+                {selectedPhotos.length}/6장
+              </span>
+            </div>
+            <input
+              key={photoInputResetKey}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              onChange={handlePhotoSelect}
+              disabled={!canSave || isLoading}
+              className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white disabled:cursor-not-allowed disabled:bg-slate-100"
+            />
+            {selectedPhotoPreviews.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {selectedPhotoPreviews.map((preview, index) => (
+                  <div
+                    key={preview.id}
+                    className="overflow-hidden rounded-lg border border-slate-200 bg-white"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={preview.url}
+                      alt={`선택한 임장 사진 ${index + 1}`}
+                      className="aspect-[4/3] w-full object-cover"
+                    />
+                    <div className="flex items-center justify-between gap-2 px-3 py-2">
+                      <p className="truncate text-xs font-semibold text-slate-600">
+                        {preview.name}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => removeSelectedPhoto(index)}
+                        className="shrink-0 rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                      >
+                        제거
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
         <button
           type="submit"
@@ -474,6 +772,7 @@ export function FieldNotesClient({
                 </button>
               </div>
               <FieldNoteRatingSummary note={note} />
+              <FieldNotePhotoGallery photos={photoRowsByNoteId[note.id] ?? []} />
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <NoteSection label="장점" value={note.good_points} />
                 <NoteSection label="단점" value={note.bad_points} />
@@ -495,6 +794,16 @@ export function FieldNotesClient({
         )}
       </section>
     </div>
+  );
+}
+
+function isMissingTableError(error: { code?: string; message?: string }) {
+  const message = error.message?.toLowerCase() ?? "";
+
+  return (
+    error.code === "42P01" ||
+    message.includes('relation "public.field_note_photos" does not exist') ||
+    message.includes("could not find the table 'field_note_photos'")
   );
 }
 
@@ -551,6 +860,42 @@ function FieldNoteRatingSummary({ note }: Readonly<{ note: FieldNoteRow }>) {
         >
           {label} {value}/5
         </span>
+      ))}
+    </div>
+  );
+}
+
+function FieldNotePhotoGallery({
+  photos,
+}: Readonly<{ photos: FieldNotePhotoDisplay[] }>) {
+  if (photos.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {photos.map((photo, index) => (
+        <figure
+          key={photo.id}
+          className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+        >
+          {photo.signedUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={photo.signedUrl}
+              alt={`저장된 임장 사진 ${index + 1}`}
+              className="aspect-[4/3] w-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="grid aspect-[4/3] place-items-center px-4 text-center text-xs leading-5 text-slate-500">
+              사진 미리보기를 불러오지 못했습니다.
+            </div>
+          )}
+          <figcaption className="truncate px-3 py-2 text-xs font-semibold text-slate-600">
+            {photo.original_file_name ?? `임장 사진 ${index + 1}`}
+          </figcaption>
+        </figure>
       ))}
     </div>
   );

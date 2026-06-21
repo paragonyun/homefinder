@@ -260,9 +260,8 @@ export function CompareClient() {
       <div className="grid gap-4">
         <AuthPanel />
         <p className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
-          Supabase 환경변수가 없어 예시 비교표를 표시합니다. 환경변수를
-          연결하면 등록한 단지, 실거래가, K-apt 기본정보 기준으로 비교표가
-          바뀝니다.
+          로그인 구성이 연결되면 등록한 단지, 실거래가, K-apt 기본정보 기준으로
+          비교표가 표시됩니다.
         </p>
         <MockCompareTable />
       </div>

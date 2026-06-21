@@ -10,8 +10,8 @@ export default function NeighborhoodsPage() {
             관심 동네
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            MVP 1단계에서는 동네 CRUD와 연결 단지 목록을 구현합니다. 현재는
-            기획안의 카드 구조를 확인하기 위한 placeholder입니다.
+            후보 단지를 권역별로 묶어 접근성, 가격대, 임장 우선순위를 함께
+            관리합니다.
           </p>
         </div>
         <NeighborhoodsClient />

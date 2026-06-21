@@ -21,7 +21,7 @@ export default function SettingsPage() {
             <p className="mt-1 text-sm text-slate-600">
               {isSupabaseConfigured
                 ? "NEXT_PUBLIC_SUPABASE_URL과 ANON_KEY가 설정되어 있습니다."
-                : "환경변수가 없어 placeholder 모드로 표시 중입니다."}
+                : "로그인 구성이 아직 연결되지 않았습니다."}
             </p>
           </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-4">

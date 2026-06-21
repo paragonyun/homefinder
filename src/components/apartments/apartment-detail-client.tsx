@@ -5,6 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { FieldNotesClient } from "@/components/field-notes/field-notes-client";
 import { StatusPill } from "@/components/ui/status-pill";
+import { ActionButton, EmptyState } from "@/components/ui/app-surfaces";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import { apartments as mockApartments } from "@/lib/mock-data";
 import {
@@ -117,12 +118,6 @@ type KaptCodeResolveResult = {
   candidates?: KaptCodeCandidate[];
   reason?: string;
 };
-
-const sections = [
-  ["건축정보", "건축물대장 후보 데이터가 확보되면 용적률, 건폐율, 대지면적을 표시합니다."],
-  ["내 판단", "관심/보류/제외 상태와 추가 확인사항을 남깁니다."],
-  ["데이터 출처", "source, fetched_at, confidence_level을 함께 표시합니다."],
-];
 
 export function ApartmentDetailClient({
   apartmentId,
@@ -782,7 +777,7 @@ export function ApartmentDetailClient({
             ) : null}
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <HeroMetric
               label="종합점수"
               value={`${formatScore(apartmentScore.totalScore)}점`}
@@ -829,11 +824,6 @@ export function ApartmentDetailClient({
               detail={basicInfo ? "K-apt 기준" : "기본정보 필요"}
             />
             <HeroMetric
-              label="주차"
-              value={formatOptionalCount(basicInfo?.parking_count ?? null, "대")}
-              detail={basicInfo ? "총 주차대수" : "기본정보 필요"}
-            />
-            <HeroMetric
               label="주차/세대"
               value={formatParkingPerHousehold(parkingPerHousehold)}
               detail={basicInfo ? "세대당 주차수" : "기본정보 필요"}
@@ -843,28 +833,28 @@ export function ApartmentDetailClient({
               value={formatRatioPercent(buildingInfo?.floor_area_ratio ?? null)}
               detail={buildingInfo ? "건축물대장 기준" : "건축정보 필요"}
             />
-            <HeroMetric
-              label="건폐율"
-              value={formatRatioPercent(
-                buildingInfo?.building_coverage_ratio ?? null,
-              )}
-              detail={buildingInfo ? "건축물대장 기준" : "건축정보 필요"}
-            />
-            <HeroMetric
-              label="사용승인"
-              value={basicInfo?.approval_date ? formatDate(basicInfo.approval_date) : "-"}
-              detail="K-apt 기본정보"
-            />
-            <HeroMetric
-              label="정보 갱신"
-              value={basicInfo?.fetched_at ? formatDate(basicInfo.fetched_at) : "-"}
-              detail="최근 K-apt 반영"
-            />
           </div>
 
           <ScoreBreakdownPanel score={apartmentScore} />
         </div>
       </section>
+
+      {!mockApartment && session ? (
+        <DataManagementPanel
+          isAdmin={isAdmin}
+          apartment={apartment}
+          hasAnySyncInProgress={hasAnySyncInProgress}
+          isCommuteSyncing={isCommuteSyncing}
+          isBasicInfoSyncing={isBasicInfoSyncing}
+          isBuildingInfoSyncing={isBuildingInfoSyncing}
+          isSyncing={isSyncing}
+          isComprehensiveSyncing={isComprehensiveSyncing}
+          onCommuteRefresh={handleCommuteRefresh}
+          onBasicInfoSync={handleBasicInfoSync}
+          onBuildingInfoSync={handleBuildingInfoSync}
+          onTransactionSync={handleTransactionSync}
+        />
+      ) : null}
 
       <section className="grid min-w-0 gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -877,16 +867,6 @@ export function ApartmentDetailClient({
               소요시간을 24시간 캐시로 표시합니다.
             </p>
           </div>
-          {!mockApartment && session ? (
-            <button
-              type="button"
-              onClick={() => void handleCommuteRefresh()}
-              disabled={hasAnySyncInProgress || !isAdmin}
-            className="h-10 w-full rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:bg-slate-300 sm:w-auto"
-            >
-              {isCommuteSyncing ? "접근성 조회 중" : "접근성 자동 조회"}
-            </button>
-          ) : null}
         </div>
         <div className="grid items-start gap-3 md:grid-cols-2">
           <CommuteAccessCard
@@ -926,33 +906,6 @@ export function ApartmentDetailClient({
               K-apt 코드: {apartment?.kapt_code ?? "미입력"}
             </p>
           </div>
-          {!mockApartment && session ? (
-            <div className="grid gap-2">
-              <button
-                type="button"
-                onClick={() => void handleBasicInfoSync()}
-                disabled={
-                  isBasicInfoSyncing ||
-                  isComprehensiveSyncing ||
-                  !apartment?.kapt_code ||
-                  !isAdmin
-                }
-                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-300"
-              >
-                {isBasicInfoSyncing ? "조회 중" : "K-apt 기본정보 불러오기"}
-              </button>
-              {!isAdmin ? (
-                <p className="max-w-64 text-xs leading-5 text-slate-500">
-                  K-apt 기본정보 동기화는 운영자 계정에서만 실행할 수 있습니다.
-                </p>
-              ) : !apartment?.kapt_code ? (
-                <p className="max-w-64 text-xs leading-5 text-slate-500">
-                  종합 조회로 K-apt 코드를 자동 탐색하거나, 단지 수정에서 직접
-                  입력하면 버튼이 활성화됩니다.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         {basicInfo ? (
@@ -997,10 +950,10 @@ export function ApartmentDetailClient({
             />
           </div>
         ) : (
-          <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-            아직 저장된 K-apt 기본정보가 없습니다. 운영자 계정에서 종합 조회를
-            실행하거나 K-apt 코드를 확인한 뒤 기본정보를 불러오세요.
-          </p>
+          <EmptyState>
+            아직 저장된 K-apt 기본정보가 없습니다. 상단 데이터 관리에서 종합
+            조회를 실행하면 세대수와 주차 정보를 함께 반영합니다.
+          </EmptyState>
         )}
       </section>
 
@@ -1013,21 +966,6 @@ export function ApartmentDetailClient({
             건축물대장 또는 수동 검증 데이터 기준으로 용적률과 건폐율을 표시합니다.
           </p>
         </div>
-
-        {!mockApartment && session ? (
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => void handleBuildingInfoSync()}
-              disabled={hasAnySyncInProgress || !isAdmin}
-              className="h-10 w-full rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-300 sm:w-auto"
-            >
-              {isBuildingInfoSyncing
-                ? "건축정보 조회 중"
-                : "건축물대장 정보 불러오기"}
-            </button>
-          </div>
-        ) : null}
 
         {buildingInfo ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1051,11 +989,10 @@ export function ApartmentDetailClient({
             />
           </div>
         ) : (
-          <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-            아직 저장된 건축 밀도 정보가 없습니다. `apartment_building_info`
-            테이블에 용적률과 건폐율을 저장하면 이 영역과 비교 화면에 함께
-            표시됩니다.
-          </p>
+          <EmptyState>
+            아직 저장된 건축 밀도 정보가 없습니다. 상단 데이터 관리에서 건축물대장
+            조회를 실행하면 용적률과 건폐율을 반영합니다.
+          </EmptyState>
         )}
       </section>
 
@@ -1073,33 +1010,6 @@ export function ApartmentDetailClient({
               법정동코드: {apartment?.lawd_cd ?? "미입력"}
             </p>
           </div>
-          {!mockApartment && session ? (
-            <div className="grid gap-2">
-              <button
-                type="button"
-                onClick={() => void handleTransactionSync()}
-                disabled={
-                  isSyncing ||
-                  isComprehensiveSyncing ||
-                  !apartment?.lawd_cd ||
-                  !isAdmin
-                }
-                className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:bg-slate-300"
-              >
-                {isSyncing ? "조회 중" : "최근 실거래가 불러오기"}
-              </button>
-              {!isAdmin ? (
-                <p className="max-w-64 text-xs leading-5 text-slate-500">
-                  실거래가 동기화는 운영자 계정에서만 실행할 수 있습니다.
-                </p>
-              ) : !apartment?.lawd_cd ? (
-                <p className="max-w-64 text-xs leading-5 text-slate-500">
-                  단지 수정에서 법정동코드를 입력하면 버튼이 활성화됩니다. 10자리
-                  법정동코드는 그대로 저장하고, 국토부 조회에는 앞 5자리만 사용합니다.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
 
         {transactions.length > 0 ? (
@@ -1285,27 +1195,6 @@ export function ApartmentDetailClient({
           </div>
         </details>
 
-        <div className="mt-5 grid gap-2 border-t border-slate-200 pt-4">
-          <div>
-            <h3 className="text-sm font-semibold tracking-normal text-slate-950">
-              다음 리서치 항목
-            </h3>
-            <p className="mt-1 text-sm leading-6 text-slate-600">
-              아직 자동화되지 않은 항목은 접힌 목록으로만 유지합니다.
-            </p>
-          </div>
-          {sections.map(([sectionTitle, body]) => (
-            <details
-              key={sectionTitle}
-              className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3"
-            >
-              <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-                {sectionTitle}
-              </summary>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
-            </details>
-          ))}
-        </div>
       </section>
     </div>
   );
@@ -1318,6 +1207,116 @@ function DataBadge({ label }: Readonly<{ label: string }>) {
     <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 shadow-sm">
       {label}
     </span>
+  );
+}
+
+type DataManagementPanelProps = {
+  apartment: ApartmentRowData | null;
+  hasAnySyncInProgress: boolean;
+  isAdmin: boolean;
+  isBasicInfoSyncing: boolean;
+  isBuildingInfoSyncing: boolean;
+  isCommuteSyncing: boolean;
+  isComprehensiveSyncing: boolean;
+  isSyncing: boolean;
+  onBasicInfoSync: () => void | Promise<void>;
+  onBuildingInfoSync: () => void | Promise<void>;
+  onCommuteRefresh: () => void | Promise<void>;
+  onTransactionSync: () => void | Promise<void>;
+};
+
+function DataManagementPanel({
+  apartment,
+  hasAnySyncInProgress,
+  isAdmin,
+  isBasicInfoSyncing,
+  isBuildingInfoSyncing,
+  isCommuteSyncing,
+  isComprehensiveSyncing,
+  isSyncing,
+  onBasicInfoSync,
+  onBuildingInfoSync,
+  onCommuteRefresh,
+  onTransactionSync,
+}: Readonly<DataManagementPanelProps>) {
+  const helperText = !isAdmin
+    ? "운영자 계정에서만 실행할 수 있습니다."
+    : "상단 종합 조회는 전체 데이터를 갱신하고, 여기서는 필요한 항목만 다시 조회합니다.";
+
+  return (
+    <details className="group rounded-lg border border-slate-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none flex-col gap-3 p-4 marker:hidden sm:flex-row sm:items-center sm:justify-between sm:p-5">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Admin Tools
+          </p>
+          <h2 className="mt-1 text-lg font-semibold tracking-normal text-slate-950">
+            데이터 관리
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            개별 재조회가 필요할 때만 열어 사용하는 운영자용 패널입니다.
+          </p>
+        </div>
+        <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+          <span className="group-open:hidden">열기</span>
+          <span className="hidden group-open:inline">닫기</span>
+        </span>
+      </summary>
+
+      <div className="grid gap-4 border-t border-slate-200 p-4 sm:p-5">
+        <div className="flex flex-wrap gap-2">
+          <DataBadge label={`법정동 ${apartment?.lawd_cd ?? "미입력"}`} />
+          <DataBadge label={`K-apt ${apartment?.kapt_code ?? "미입력"}`} />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <ActionButton
+            tone="secondary"
+            className="sm:w-full"
+            onClick={() => void onCommuteRefresh()}
+            disabled={hasAnySyncInProgress || !isAdmin}
+          >
+            {isCommuteSyncing ? "접근성 조회 중" : "접근성 자동 조회"}
+          </ActionButton>
+          <ActionButton
+            tone="primary"
+            className="sm:w-full"
+            onClick={() => void onBasicInfoSync()}
+            disabled={
+              isBasicInfoSyncing ||
+              isComprehensiveSyncing ||
+              !apartment?.kapt_code ||
+              !isAdmin
+            }
+          >
+            {isBasicInfoSyncing ? "K-apt 조회 중" : "K-apt 기본정보"}
+          </ActionButton>
+          <ActionButton
+            tone="primary"
+            className="sm:w-full"
+            onClick={() => void onBuildingInfoSync()}
+            disabled={hasAnySyncInProgress || !isAdmin}
+          >
+            {isBuildingInfoSyncing ? "건축정보 조회 중" : "건축물대장"}
+          </ActionButton>
+          <ActionButton
+            tone="primary"
+            className="sm:w-full"
+            onClick={() => void onTransactionSync()}
+            disabled={
+              isSyncing ||
+              isComprehensiveSyncing ||
+              !apartment?.lawd_cd ||
+              !isAdmin
+            }
+          >
+            {isSyncing ? "실거래가 조회 중" : "실거래가"}
+          </ActionButton>
+        </div>
+
+        <p className="text-xs leading-5 text-slate-500">{helperText}</p>
+      </div>
+    </details>
   );
 }
 

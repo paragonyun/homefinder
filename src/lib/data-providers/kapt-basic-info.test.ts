@@ -9,6 +9,15 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+
+  return { promise, resolve };
+}
+
 describe("parseKaptBasicInfoResponse", () => {
   it("normalizes K-apt basic info rows into apartment basic info fields", () => {
     const response = {
@@ -168,6 +177,60 @@ describe("buildKaptBasicInfoUrl", () => {
 });
 
 describe("fetchKaptBasicInfoJson", () => {
+  it("starts basis and detail requests in parallel", async () => {
+    const basis = createDeferred<Response>();
+    const detail = createDeferred<Response>();
+
+    vi.spyOn(globalThis, "fetch")
+      .mockReturnValueOnce(basis.promise)
+      .mockReturnValueOnce(detail.promise);
+
+    const resultPromise = fetchKaptBasicInfoJson({
+      serviceKey: "abc",
+      kaptCode: "A10027875",
+    });
+
+    await Promise.resolve();
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+
+    basis.resolve(
+      new Response(
+        JSON.stringify({
+          response: {
+            header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+            body: { item: { kaptCode: "A10027875", kaptName: "Basis" } },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    detail.resolve(
+      new Response(
+        JSON.stringify({
+          response: {
+            header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+            body: { item: { kaptCode: "A10027875", kaptName: "Detail" } },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(resultPromise).resolves.toMatchObject({
+      basis: {
+        response: {
+          body: { item: { kaptName: "Basis" } },
+        },
+      },
+      detail: {
+        response: {
+          body: { item: { kaptName: "Detail" } },
+        },
+      },
+    });
+  });
+
   it("fetches basis and detail responses", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
@@ -214,17 +277,19 @@ describe("fetchKaptBasicInfoJson", () => {
   });
 
   it("surfaces API error bodies from non-2xx responses", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          OpenAPI_ServiceResponse: {
-            cmmMsgHeader: {
-              returnReasonCode: "20",
-              returnAuthMsg: "SERVICE_ACCESS_DENIED_ERROR.",
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            OpenAPI_ServiceResponse: {
+              cmmMsgHeader: {
+                returnReasonCode: "20",
+                returnAuthMsg: "SERVICE_ACCESS_DENIED_ERROR.",
+              },
             },
-          },
-        }),
-        { status: 403 },
+          }),
+          { status: 403 },
+        ),
       ),
     );
 
@@ -237,10 +302,12 @@ describe("fetchKaptBasicInfoJson", () => {
   });
 
   it("surfaces XML API error bodies from non-2xx responses", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        "<OpenAPI_ServiceResponse><cmmMsgHeader><returnReasonCode>30</returnReasonCode><returnAuthMsg>SERVICE KEY IS NOT REGISTERED ERROR.</returnAuthMsg></cmmMsgHeader></OpenAPI_ServiceResponse>",
-        { status: 403 },
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          "<OpenAPI_ServiceResponse><cmmMsgHeader><returnReasonCode>30</returnReasonCode><returnAuthMsg>SERVICE KEY IS NOT REGISTERED ERROR.</returnAuthMsg></cmmMsgHeader></OpenAPI_ServiceResponse>",
+          { status: 403 },
+        ),
       ),
     );
 

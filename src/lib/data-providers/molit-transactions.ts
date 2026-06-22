@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { fetchWithTimeout } from "./http";
 
 export const MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT =
   "http://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev";
@@ -223,7 +224,7 @@ export async function fetchMolitApartmentTradeXml({
   pageNo,
   numOfRows,
 }: FetchMolitApartmentTradesParams & { pageNo: number; numOfRows: number }) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     buildMolitApartmentTradeUrl({
       serviceKey,
       lawdCd,
@@ -231,6 +232,8 @@ export async function fetchMolitApartmentTradeXml({
       pageNo,
       numOfRows,
     }),
+    undefined,
+    { label: "MOLIT apartment trade API" },
   );
 
   if (!response.ok) {

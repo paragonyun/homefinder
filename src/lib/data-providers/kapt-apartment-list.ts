@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { fetchWithTimeout } from "./http";
 
 export const KAPT_APARTMENT_LIST_ENDPOINT =
   "http://apis.data.go.kr/1613000/AptListService3/getSidoAptList3";
@@ -172,7 +173,7 @@ async function fetchPaginatedKaptApartmentList({
   let totalCount = Number.POSITIVE_INFINITY;
 
   while ((pageNo - 1) * numOfRows < totalCount && pageNo <= 20) {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       buildKaptApartmentListUrlWithEndpoint({
         endpoint,
         serviceKey,
@@ -181,6 +182,8 @@ async function fetchPaginatedKaptApartmentList({
         pageNo,
         numOfRows,
       }),
+      undefined,
+      { label: "K-apt apartment list API" },
     );
     const body = await response.text();
 

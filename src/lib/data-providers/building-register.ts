@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { fetchWithTimeout } from "./http";
 
 export const BUILDING_REGISTER_RECAP_TITLE_ENDPOINT =
   "http://apis.data.go.kr/1613000/BldRgstHubService/getBrRecapTitleInfo";
@@ -112,7 +113,7 @@ async function fetchBuildingRegisterEndpoint({
   serviceKey: string;
   query: BuildingRegisterQuery;
 }) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     buildBuildingRegisterUrl({
       endpoint,
       serviceKey,
@@ -120,6 +121,8 @@ async function fetchBuildingRegisterEndpoint({
       pageNo: 1,
       numOfRows: 100,
     }),
+    undefined,
+    { label: "Building register API" },
   );
   const body = await response.text();
   const rawResponse = parseResponseBody(body);

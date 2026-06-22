@@ -2,6 +2,7 @@ import type {
   CommuteRouteStep,
   CommuteTransportType,
 } from "@/types/commute";
+import { fetchWithTimeout } from "./http";
 
 export const TMAP_TRANSIT_ROUTES_ENDPOINT =
   "https://apis.openapi.sk.com/transit/routes";
@@ -36,24 +37,28 @@ export async function fetchTmapTransitRoute({
   searchDttm: string;
   start: Coordinate;
 }) {
-  const response = await fetch(TMAP_TRANSIT_ROUTES_ENDPOINT, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      appKey: apiKey,
-      "content-type": "application/json",
+  const response = await fetchWithTimeout(
+    TMAP_TRANSIT_ROUTES_ENDPOINT,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        appKey: apiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        startX: String(start.lng),
+        startY: String(start.lat),
+        endX: String(destination.lng),
+        endY: String(destination.lat),
+        lang: 0,
+        format: "json",
+        count: 1,
+        searchDttm,
+      }),
     },
-    body: JSON.stringify({
-      startX: String(start.lng),
-      startY: String(start.lat),
-      endX: String(destination.lng),
-      endY: String(destination.lat),
-      lang: 0,
-      format: "json",
-      count: 1,
-      searchDttm,
-    }),
-  });
+    { label: "TMAP transit API" },
+  );
   const body = await readJsonResponse(response);
 
   if (!response.ok) {
@@ -124,25 +129,29 @@ export async function fetchTmapDrivingRoute({
   url.searchParams.set("version", "1");
   url.searchParams.set("format", "json");
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      appKey: apiKey,
-      "content-type": "application/json",
+  const response = await fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        appKey: apiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        startX: String(start.lng),
+        startY: String(start.lat),
+        endX: String(destination.lng),
+        endY: String(destination.lat),
+        reqCoordType: "WGS84GEO",
+        resCoordType: "WGS84GEO",
+        searchOption: "0",
+        carType: "0",
+        trafficInfo: "N",
+      }),
     },
-    body: JSON.stringify({
-      startX: String(start.lng),
-      startY: String(start.lat),
-      endX: String(destination.lng),
-      endY: String(destination.lat),
-      reqCoordType: "WGS84GEO",
-      resCoordType: "WGS84GEO",
-      searchOption: "0",
-      carType: "0",
-      trafficInfo: "N",
-    }),
-  });
+    { label: "TMAP driving API" },
+  );
   const body = await readJsonResponse(response);
 
   if (!response.ok) {
@@ -215,12 +224,16 @@ export async function geocodeAddressWithTmap({
   url.searchParams.set("count", "1");
   url.searchParams.set("fullAddr", address);
 
-  const response = await fetch(url, {
-    headers: {
-      accept: "application/json",
-      appKey: apiKey,
+  const response = await fetchWithTimeout(
+    url,
+    {
+      headers: {
+        accept: "application/json",
+        appKey: apiKey,
+      },
     },
-  });
+    { label: "TMAP geocode API" },
+  );
   const body = await readJsonResponse(response);
 
   if (!response.ok) {

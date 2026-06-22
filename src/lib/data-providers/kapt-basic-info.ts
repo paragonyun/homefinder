@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { fetchWithTimeout } from "./http";
 
 export const KAPT_BASIC_INFO_ENDPOINT =
   "http://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4";
@@ -89,16 +90,18 @@ export async function fetchKaptBasicInfoJson({
   serviceKey,
   kaptCode,
 }: FetchKaptBasicInfoParams) {
-  const basis = await fetchKaptBasicInfoEndpoint({
-    endpoint: KAPT_BASIC_INFO_ENDPOINT,
-    serviceKey,
-    kaptCode,
-  });
-  const detail = await fetchKaptBasicInfoEndpoint({
-    endpoint: KAPT_BASIC_INFO_DETAIL_ENDPOINT,
-    serviceKey,
-    kaptCode,
-  });
+  const [basis, detail] = await Promise.all([
+    fetchKaptBasicInfoEndpoint({
+      endpoint: KAPT_BASIC_INFO_ENDPOINT,
+      serviceKey,
+      kaptCode,
+    }),
+    fetchKaptBasicInfoEndpoint({
+      endpoint: KAPT_BASIC_INFO_DETAIL_ENDPOINT,
+      serviceKey,
+      kaptCode,
+    }),
+  ]);
 
   return { basis, detail };
 }
@@ -108,8 +111,10 @@ async function fetchKaptBasicInfoEndpoint({
   serviceKey,
   kaptCode,
 }: FetchKaptBasicInfoParams & { endpoint: string }) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     buildKaptBasicInfoUrl({ endpoint, serviceKey, kaptCode }),
+    undefined,
+    { label: "K-apt basic info API" },
   );
   const body = await response.text();
   const parsed = parseResponseBody(body);

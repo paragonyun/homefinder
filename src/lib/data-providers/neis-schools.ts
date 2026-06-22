@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "./http";
+
 export const NEIS_SCHOOL_INFO_ENDPOINT =
   "https://open.neis.go.kr/hub/schoolInfo";
 
@@ -48,7 +50,7 @@ export async function fetchNeisSchoolInfoPages({
   let totalCount = Number.POSITIVE_INFINITY;
 
   while ((pageIndex - 1) * pageSize < totalCount && pageIndex <= 10) {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       buildNeisSchoolInfoUrl({
         apiKey,
         regionName,
@@ -56,6 +58,8 @@ export async function fetchNeisSchoolInfoPages({
         pageIndex,
         pageSize,
       }),
+      undefined,
+      { label: "NEIS schoolInfo API" },
     );
     const body = await response.text();
 

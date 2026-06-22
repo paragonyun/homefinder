@@ -7,6 +7,10 @@ import { AuthPanel } from "@/components/auth/auth-panel";
 import { StatusPill } from "@/components/ui/status-pill";
 import { apartments as mockApartments, statusLabels } from "@/lib/mock-data";
 import { buildApartmentComparisonRows } from "@/lib/services/apartment-comparison";
+import {
+  fetchApartmentReadTables,
+  type ApartmentReadClient,
+} from "@/lib/services/apartment-read-tables";
 import { formatBuildingDensityRatio } from "@/lib/services/building-density";
 import {
   filterComparisonRows,
@@ -84,96 +88,20 @@ export function CompareClient() {
       return;
     }
 
-    const [
-      transactionResult,
-      basicInfoResult,
-      buildingInfoResult,
-      commuteResult,
-      fieldNoteResult,
-    ] = await Promise.all([
-        supabase
-          .from("apartment_transactions")
-          .select("*")
-          .in("apartment_id", apartmentIds)
-          .order("deal_date", { ascending: false })
-          .limit(2000),
-        supabase
-          .from("apartment_basic_info")
-          .select("*")
-          .in("apartment_id", apartmentIds)
-          .order("fetched_at", { ascending: false }),
-        supabase
-          .from("apartment_building_info")
-          .select("*")
-          .in("apartment_id", apartmentIds)
-          .order("fetched_at", { ascending: false }),
-        supabase
-          .from("commute_times")
-          .select("*")
-          .in("apartment_id", apartmentIds)
-          .order("fetched_at", { ascending: false }),
-        supabase
-          .from("field_notes")
-          .select("*")
-          .in("apartment_id", apartmentIds)
-          .order("visit_date", { ascending: false })
-          .order("updated_at", { ascending: false }),
-      ]);
-    const messages: string[] = [];
+    const readTables = await fetchApartmentReadTables(
+      supabase as unknown as ApartmentReadClient,
+      apartmentIds,
+      "comparison",
+    );
 
-    if (transactionResult.error) {
-      messages.push(transactionResult.error.message);
-      setTransactions([]);
-    } else {
-      setTransactions(
-        (transactionResult.data ?? []) as ApartmentTransactionRow[],
-      );
-    }
+    setTransactions(readTables.transactions);
+    setBasicInfos(readTables.basicInfos);
+    setBuildingInfos(readTables.buildingInfos);
+    setCommuteTimes(readTables.commuteTimes);
+    setFieldNotes(readTables.fieldNotes);
 
-    if (basicInfoResult.error) {
-      if (!isMissingTableError(basicInfoResult.error)) {
-        messages.push(basicInfoResult.error.message);
-      }
-
-      setBasicInfos([]);
-    } else {
-      setBasicInfos((basicInfoResult.data ?? []) as ApartmentBasicInfoRow[]);
-    }
-
-    if (buildingInfoResult.error) {
-      if (!isMissingTableError(buildingInfoResult.error)) {
-        messages.push(buildingInfoResult.error.message);
-      }
-
-      setBuildingInfos([]);
-    } else {
-      setBuildingInfos(
-        (buildingInfoResult.data ?? []) as ApartmentBuildingInfoRow[],
-      );
-    }
-
-    if (commuteResult.error) {
-      if (!isMissingTableError(commuteResult.error)) {
-        messages.push(commuteResult.error.message);
-      }
-
-      setCommuteTimes([]);
-    } else {
-      setCommuteTimes((commuteResult.data ?? []) as CommuteTimeRow[]);
-    }
-
-    if (fieldNoteResult.error) {
-      if (!isMissingTableError(fieldNoteResult.error)) {
-        messages.push(fieldNoteResult.error.message);
-      }
-
-      setFieldNotes([]);
-    } else {
-      setFieldNotes((fieldNoteResult.data ?? []) as FieldNoteRow[]);
-    }
-
-    if (messages.length > 0) {
-      setMessage(messages.join(" / "));
+    if (readTables.notices.length > 0) {
+      setMessage(readTables.notices.join(" / "));
     }
 
     setIsLoading(false);
@@ -939,8 +867,4 @@ function formatMeters(value: number) {
         maximumFractionDigits: 1,
       })}km`
     : `${value.toLocaleString("ko-KR")}m`;
-}
-
-function isMissingTableError(error: { code?: string }) {
-  return error.code === "42P01" || error.code === "PGRST205";
 }

@@ -18,6 +18,10 @@ import {
   type DashboardTransaction,
 } from "@/lib/services/dashboard-model";
 import {
+  fetchApartmentReadTables,
+  type ApartmentReadClient,
+} from "@/lib/services/apartment-read-tables";
+import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
@@ -185,93 +189,26 @@ export function DashboardClient() {
       return;
     }
 
-    const [
-      transactionResult,
-      basicInfoResult,
-      buildingInfoResult,
-      commuteResult,
-      fieldNoteResult,
-    ] = await Promise.all([
-        supabase
-          .from("apartment_transactions")
-          .select("apartment_id,deal_amount_krw,deal_date")
-          .in("apartment_id", apartmentIds),
-        supabase
-          .from("apartment_basic_info")
-          .select(
-            "apartment_id,household_count,parking_count,approval_date,fetched_at",
-          )
-          .in("apartment_id", apartmentIds),
-        supabase
-          .from("apartment_building_info")
-          .select(
-            "apartment_id,floor_area_ratio,building_coverage_ratio,fetched_at",
-          )
-          .in("apartment_id", apartmentIds),
-        supabase
-          .from("commute_times")
-          .select(
-            "apartment_id,destination_key,transport_type,duration_minutes",
-          )
-          .in("apartment_id", apartmentIds),
-        supabase
-          .from("field_notes")
-          .select(
-            "apartment_id,visit_date,station_walk_rating,slope_rating,complex_condition_rating,parking_rating,noise_rating,night_mood_rating,commercial_area_rating,overall_rating,revisit_intention,overall_memo,bad_points,parking_note,noise_note,slope_note,created_at,updated_at",
-          )
-          .in("apartment_id", apartmentIds),
-      ]);
+    const readTables = await fetchApartmentReadTables(
+      supabase as unknown as ApartmentReadClient,
+      apartmentIds,
+      "dashboard",
+    );
 
-    const notices: string[] = [];
-    const basicInfos = isMissingTableError(basicInfoResult.error)
-      ? []
-      : ((basicInfoResult.data ?? []) as ApartmentBasicInfoRow[]);
-    const buildingInfos = isMissingTableError(buildingInfoResult.error)
-      ? []
-      : ((buildingInfoResult.data ?? []) as ApartmentBuildingInfoRow[]);
-    const commuteTimes = isMissingTableError(commuteResult.error)
-      ? []
-      : ((commuteResult.data ?? []) as CommuteTimeRow[]);
-    const fieldNotes = isMissingTableError(fieldNoteResult.error)
-      ? []
-      : ((fieldNoteResult.data ?? []) as FieldNoteRow[]);
-
-    if (transactionResult.error) {
-      notices.push(transactionResult.error.message);
-    }
-
-    if (basicInfoResult.error && !isMissingTableError(basicInfoResult.error)) {
-      notices.push(basicInfoResult.error.message);
-    }
-
-    if (
-      buildingInfoResult.error &&
-      !isMissingTableError(buildingInfoResult.error)
-    ) {
-      notices.push(buildingInfoResult.error.message);
-    }
-
-    if (commuteResult.error && !isMissingTableError(commuteResult.error)) {
-      notices.push(commuteResult.error.message);
-    }
-
-    if (fieldNoteResult.error && !isMissingTableError(fieldNoteResult.error)) {
-      notices.push(fieldNoteResult.error.message);
-    }
-
-    setMessage(notices.length > 0 ? notices.join(" / ") : null);
+    setMessage(
+      readTables.notices.length > 0 ? readTables.notices.join(" / ") : null,
+    );
     setModel(
       buildDashboardModel({
         apartments: apartments.map(toDashboardApartment),
-        basicInfos: basicInfos.map(toDashboardBasicInfo),
-        buildingInfos: buildingInfos.map(toDashboardBuildingInfo),
-        commuteTimes: commuteTimes.map(toDashboardCommuteTime),
-        fieldNotes: fieldNotes.map(toDashboardFieldNote),
+        basicInfos: readTables.basicInfos.map(toDashboardBasicInfo),
+        buildingInfos: readTables.buildingInfos.map(toDashboardBuildingInfo),
+        commuteTimes: readTables.commuteTimes.map(toDashboardCommuteTime),
+        fieldNotes: readTables.fieldNotes.map(toDashboardFieldNote),
         neighborhoods: ((neighborhoodRows ?? []) as NeighborhoodRow[]).map(
           toDashboardNeighborhood,
         ),
-        transactions: ((transactionResult.data ??
-          []) as ApartmentTransactionRow[]).map(toDashboardTransaction),
+        transactions: readTables.transactions.map(toDashboardTransaction),
       }),
     );
     setIsLoading(false);
@@ -750,8 +687,4 @@ function toDashboardFieldNote(row: FieldNoteRow): DashboardFieldNote {
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
-}
-
-function isMissingTableError(error: { code?: string } | null) {
-  return error?.code === "42P01" || error?.code === "PGRST205";
 }

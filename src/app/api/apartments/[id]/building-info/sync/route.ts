@@ -1,21 +1,20 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
+import { fetchBuildingRegisterInfo } from "@/lib/data-providers/building-register";
 import {
-  fetchBuildingRegisterInfo,
-  type BuildingRegisterInfo,
-} from "@/lib/data-providers/building-register";
-import {
-  resolveBuildingRegisterQuery,
-  type BuildingRegisterAddressHint,
-  type BuildingRegisterBjdCodeHint,
-} from "@/lib/services/building-register-resolver";
+  buildBuildingInfoRawApiResponsePayload,
+  buildBuildingRegisterAddressHints,
+  buildBuildingRegisterBjdCodeHints,
+  toBuildingInfoPayload,
+  type BasicInfoAddressRow,
+  type KaptDirectoryAddressRow,
+  type TransactionAddressRow,
+} from "@/lib/services/apartment-building-info-sync";
+import { resolveBuildingRegisterQuery } from "@/lib/services/building-register-resolver";
 import {
   createSupabaseRouteClient,
   isSupabaseServerConfigured,
 } from "@/lib/supabase/server";
-
-const BUILDING_REGISTER_SOURCE_NAME = "molit-building-register";
 
 type ApartmentBuildingSyncRow = {
   id: string;
@@ -24,21 +23,6 @@ type ApartmentBuildingSyncRow = {
   road_address: string | null;
   lawd_cd: string | null;
   kapt_code: string | null;
-};
-
-type BasicInfoAddressRow = {
-  legal_address_from_source: string | null;
-  road_address_from_source: string | null;
-};
-
-type KaptDirectoryAddressRow = {
-  bjd_code: string | null;
-  legal_address: string | null;
-  road_address: string | null;
-};
-
-type TransactionAddressRow = {
-  address_from_source: string | null;
 };
 
 export async function POST(
@@ -122,8 +106,8 @@ export async function POST(
   } catch (error) {
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
-  const bjdCodes = buildBjdCodeHints(directoryInfo);
-  const addresses = buildAddressHints({
+  const bjdCodes = buildBuildingRegisterBjdCodeHints(directoryInfo);
+  const addresses = buildBuildingRegisterAddressHints({
     apartment: apartmentRow,
     basicInfo,
     directoryInfo,
@@ -160,35 +144,14 @@ export async function POST(
 
   const { data: rawRow, error: rawError } = await supabase
     .from("raw_api_responses")
-    .insert({
-      provider: "molit",
-      endpoint: fetched.endpoint,
-      request_hash: hashText(
-        JSON.stringify({
-          apartmentId,
-          query: resolution.query,
-          matchedAddress: resolution.matchedAddress,
-          addressSource: resolution.addressSource,
-          bjdCodeSource: resolution.bjdCodeSource,
-        }),
-      ),
-      request_params: {
+    .insert(
+      buildBuildingInfoRawApiResponsePayload({
         apartmentId,
-        query: resolution.query,
-        matchedAddress: resolution.matchedAddress,
-        addressSource: resolution.addressSource,
-        bjdCodeSource: resolution.bjdCodeSource,
-      },
-      response_body: {
-        endpoint: fetched.endpoint,
-        totalCount: fetched.parsed.totalCount,
-        selected: fetched.selected,
-        items: fetched.parsed.items,
-        rawResponse: fetched.rawResponse,
-      },
-      apartment_id: apartmentId,
-      user_id: user.id,
-    })
+        fetched,
+        resolution,
+        userId: user.id,
+      }),
+    )
     .select("id")
     .single();
 
@@ -304,106 +267,6 @@ async function loadTransactionAddresses(
   return error ? [] : ((data ?? []) as TransactionAddressRow[]);
 }
 
-function buildBjdCodeHints(directoryInfo: KaptDirectoryAddressRow | null) {
-  const hints: BuildingRegisterBjdCodeHint[] = [];
-
-  if (directoryInfo?.bjd_code) {
-    hints.push({
-      value: directoryInfo.bjd_code,
-      source: "kapt_code_directory",
-    });
-  }
-
-  return hints;
-}
-
-function buildAddressHints({
-  apartment,
-  basicInfo,
-  directoryInfo,
-  transactionAddresses,
-}: {
-  apartment: ApartmentBuildingSyncRow;
-  basicInfo: BasicInfoAddressRow | null;
-  directoryInfo: KaptDirectoryAddressRow | null;
-  transactionAddresses: TransactionAddressRow[];
-}) {
-  const hints: BuildingRegisterAddressHint[] = [
-    {
-      value: basicInfo?.legal_address_from_source,
-      source: "apartment_basic_info.legal_address_from_source",
-    },
-    {
-      value: directoryInfo?.legal_address,
-      source: "kapt_code_directory.legal_address",
-    },
-    ...transactionAddresses.map((row) => ({
-      value: row.address_from_source,
-      source: "apartment_transactions.address_from_source",
-    })),
-    {
-      value: apartment.address,
-      source: "apartments.address",
-    },
-    {
-      value: basicInfo?.road_address_from_source,
-      source: "apartment_basic_info.road_address_from_source",
-    },
-    {
-      value: directoryInfo?.road_address,
-      source: "kapt_code_directory.road_address",
-    },
-    {
-      value: apartment.road_address,
-      source: "apartments.road_address",
-    },
-  ];
-  const seen = new Set<string>();
-
-  return hints.filter((hint) => {
-    const key = hint.value?.trim();
-
-    if (!key || seen.has(key)) {
-      return false;
-    }
-
-    seen.add(key);
-    return true;
-  });
-}
-
-function toBuildingInfoPayload(
-  info: BuildingRegisterInfo,
-  context: {
-    apartmentId: string;
-    fetchedAt: string;
-    rawApiResponseId: string;
-    sourceRef: string;
-    userId: string;
-  },
-) {
-  return {
-    user_id: context.userId,
-    apartment_id: context.apartmentId,
-    raw_api_response_id: context.rawApiResponseId,
-    source_name: BUILDING_REGISTER_SOURCE_NAME,
-    source_ref: context.sourceRef,
-    legal_address_from_source: info.legalAddress,
-    road_address_from_source: info.roadAddress,
-    land_area_m2: info.landAreaM2,
-    building_area_m2: info.buildingAreaM2,
-    gross_floor_area_m2: info.grossFloorAreaM2,
-    floor_area_ratio: info.floorAreaRatio,
-    building_coverage_ratio: info.buildingCoverageRatio,
-    main_use: info.mainUse,
-    highest_floor: info.highestFloor,
-    lowest_floor: info.lowestFloor,
-    structure_type: info.structureType,
-    confidence_level: "high",
-    fetched_at: context.fetchedAt,
-  };
-}
-
 function getBearerToken(request: Request) {
   const authorization = request.headers.get("authorization");
   const match = authorization?.match(/^Bearer\s+(.+)$/i);
@@ -412,10 +275,6 @@ function getBearerToken(request: Request) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "건축물대장 동기화에 실패했습니다.";
-}
-
-function hashText(value: string) {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function isMissingTableError(error: { code?: string }) {

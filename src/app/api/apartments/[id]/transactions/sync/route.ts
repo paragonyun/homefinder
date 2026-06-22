@@ -1,24 +1,20 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
-  fetchMolitApartmentTradePages,
   MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT,
-  normalizeApartmentNameForMolit,
   resolveMolitDealYmds,
-  type MolitApartmentTrade,
-  type MolitApartmentTradePage,
 } from "@/lib/data-providers/molit-transactions";
 import {
-  buildMolitTransactionCandidates,
-  filterMatchingMolitTransactions,
-} from "@/lib/services/molit-transaction-matching";
+  buildMolitTransactionSourceNames,
+  collectMolitTransactionSyncResult,
+  getAddressNumberTokens,
+  hashText,
+  toMolitTransactionPayload,
+} from "@/lib/services/apartment-transaction-sync";
 import {
   createSupabaseRouteClient,
   isSupabaseServerConfigured,
 } from "@/lib/supabase/server";
-
-const MOLIT_SOURCE_NAME = "molit-apt-trade-detail";
 
 export async function POST(
   request: Request,
@@ -111,10 +107,6 @@ export async function POST(
   const molitLawdCd = apartment.lawd_cd.slice(0, 5);
   const legalDongCd =
     apartment.lawd_cd.length === 10 ? apartment.lawd_cd.slice(5) : null;
-  const sourceNames = [
-    normalizeApartmentNameForMolit(apartment.name),
-    normalizeApartmentNameForMolit(apartment.display_name),
-  ];
   const { data: aliasRows, error: aliasError } = await supabase
     .from("apartment_aliases")
     .select("alias,source")
@@ -125,78 +117,34 @@ export async function POST(
     return NextResponse.json({ error: aliasError.message }, { status: 500 });
   }
 
-  sourceNames.push(
-    ...((aliasRows ?? []) as Array<{ alias: string | null }>)
-      .map((alias) => normalizeApartmentNameForMolit(alias.alias))
-      .filter(Boolean),
-  );
   const selectedCandidateName =
     typeof body.selectedCandidateName === "string"
       ? body.selectedCandidateName.trim()
       : "";
 
-  if (selectedCandidateName) {
-    sourceNames.push(normalizeApartmentNameForMolit(selectedCandidateName));
-  }
-
-  const uniqueSourceNames = Array.from(new Set(sourceNames.filter(Boolean)));
+  const uniqueSourceNames = buildMolitTransactionSourceNames({
+    apartmentName: apartment.name,
+    displayName: apartment.display_name,
+    aliases: ((aliasRows ?? []) as Array<{ alias: string | null }>).map(
+      (alias) => alias.alias,
+    ),
+    selectedCandidateName,
+  });
   const addressTokens = getAddressNumberTokens([
     apartment.address,
     apartment.road_address,
   ]);
-  const attempts: Array<{
-    dealYmd: string;
-    totalCount: number;
-    matchedCount: number;
-    pageCount: number;
-  }> = [];
-  const matchedPageRecords: Array<{
-    dealYmd: string;
-    page: MolitApartmentTradePage;
-  }> = [];
-  const candidateTransactions: MolitApartmentTrade[] = [];
-  let selectedDealYmd: string | null = null;
-  const transactions: MolitApartmentTrade[] = [];
+  let syncResult: Awaited<ReturnType<typeof collectMolitTransactionSyncResult>>;
 
   try {
-    for (const dealYmd of dealYmds.dealYmds) {
-      const pages = await fetchMolitApartmentTradePages({
-        serviceKey: process.env.MOLIT_API_KEY,
-        lawdCd: molitLawdCd,
-        dealYmd,
-      });
-      const matchedTransactions = filterMatchingMolitTransactions({
-        transactions: pages.flatMap((page) => page.transactions),
-        sourceNames: uniqueSourceNames,
-        legalDongCd,
-        addressTokens,
-      });
-
-      if (matchedTransactions.length === 0) {
-        candidateTransactions.push(...pages.flatMap((page) => page.transactions));
-      }
-
-      attempts.push({
-        dealYmd,
-        totalCount: pages[0]?.totalCount ?? 0,
-        matchedCount: matchedTransactions.length,
-        pageCount: pages.length,
-      });
-
-      if (matchedTransactions.length > 0) {
-        selectedDealYmd ??= dealYmd;
-        matchedPageRecords.push(...pages.map((page) => ({ dealYmd, page })));
-        transactions.push(...matchedTransactions);
-      }
-
-      if (dealYmds.mode === "manual") {
-        if (!selectedDealYmd) {
-          selectedDealYmd = dealYmd;
-          matchedPageRecords.push(...pages.map((page) => ({ dealYmd, page })));
-        }
-        break;
-      }
-    }
+    syncResult = await collectMolitTransactionSyncResult({
+      serviceKey: process.env.MOLIT_API_KEY,
+      molitLawdCd,
+      legalDongCd,
+      sourceNames: uniqueSourceNames,
+      addressTokens,
+      dealYmds,
+    });
   } catch (error) {
     return NextResponse.json(
       {
@@ -208,12 +156,6 @@ export async function POST(
       { status: 502 },
     );
   }
-  const candidateNames = buildMolitTransactionCandidates({
-    transactions: candidateTransactions,
-    sourceNames: uniqueSourceNames,
-    legalDongCd,
-    addressTokens,
-  });
 
   const { data: rawResponse, error: rawError } = await supabase
     .from("raw_api_responses")
@@ -241,16 +183,16 @@ export async function POST(
         dealYmds: dealYmds.dealYmds,
         sourceNames: uniqueSourceNames,
         selectedCandidateName: selectedCandidateName || null,
-        attempts,
+        attempts: syncResult.attempts,
       },
       response_body: {
-        totalCount: attempts.reduce((sum, attempt) => sum + attempt.totalCount, 0),
-        matchedCount: transactions.length,
-        matchedDealYmd: selectedDealYmd,
-        matchedDealYmds: getMatchedDealYmds(transactions),
-        candidateNames,
-        attempts,
-        pages: matchedPageRecords.map(({ dealYmd, page }) => ({
+        totalCount: syncResult.totalCount,
+        matchedCount: syncResult.transactions.length,
+        matchedDealYmd: syncResult.selectedDealYmd,
+        matchedDealYmds: syncResult.matchedDealYmds,
+        candidateNames: syncResult.candidateNames,
+        attempts: syncResult.attempts,
+        pages: syncResult.matchedPageRecords.map(({ dealYmd, page }) => ({
           dealYmd,
           pageNo: page.pageNo,
           rawXml: page.rawXml,
@@ -266,12 +208,12 @@ export async function POST(
     return NextResponse.json({ error: rawError.message }, { status: 500 });
   }
 
-  if (transactions.length > 0) {
+  if (syncResult.transactions.length > 0) {
     const { error: upsertError } = await supabase
       .from("apartment_transactions")
       .upsert(
-        transactions.map((transaction) =>
-          toTransactionPayload(transaction, {
+        syncResult.transactions.map((transaction) =>
+          toMolitTransactionPayload(transaction, {
             apartmentId,
             rawApiResponseId: rawResponse.id,
             userId: user.id,
@@ -307,90 +249,14 @@ export async function POST(
   }
 
   return NextResponse.json({
-    matchedCount: transactions.length,
-    totalCount: attempts.reduce((sum, attempt) => sum + attempt.totalCount, 0),
-    dealYmd: selectedDealYmd,
-    matchedDealYmds: getMatchedDealYmds(transactions),
-    monthsChecked: attempts.length,
+    matchedCount: syncResult.transactions.length,
+    totalCount: syncResult.totalCount,
+    dealYmd: syncResult.selectedDealYmd,
+    matchedDealYmds: syncResult.matchedDealYmds,
+    monthsChecked: syncResult.attempts.length,
     mode: dealYmds.mode,
-    candidateNames,
+    candidateNames: syncResult.candidateNames,
   });
-}
-
-function getMatchedDealYmds(transactions: MolitApartmentTrade[]) {
-  return Array.from(
-    new Set(
-      transactions.map(
-        (transaction) =>
-          `${transaction.dealYear}${String(transaction.dealMonth).padStart(2, "0")}`,
-      ),
-    ),
-  ).sort((left, right) => right.localeCompare(left));
-}
-
-function getAddressNumberTokens(values: Array<string | null>) {
-  return Array.from(
-    new Set(
-      values
-        .flatMap((value) => value?.match(/\d{1,4}(?:-\d{1,4})?/g) ?? [])
-        .filter((value) => value.length >= 2),
-    ),
-  );
-}
-
-function toTransactionPayload(
-  transaction: MolitApartmentTrade,
-  context: {
-    apartmentId: string;
-    rawApiResponseId: string;
-    userId: string;
-  },
-) {
-  return {
-    user_id: context.userId,
-    apartment_id: context.apartmentId,
-    raw_api_response_id: context.rawApiResponseId,
-    source_name: MOLIT_SOURCE_NAME,
-    source_ref: MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT,
-    source_hash: getTransactionSourceHash(context.apartmentId, transaction),
-    deal_year: transaction.dealYear,
-    deal_month: transaction.dealMonth,
-    deal_day: transaction.dealDay,
-    deal_date: transaction.dealDate,
-    exclusive_area_m2: transaction.exclusiveAreaM2,
-    floor: transaction.floor,
-    deal_amount_krw: transaction.dealAmountKrw,
-    deal_amount_manwon: transaction.dealAmountManwon,
-    apartment_name_from_source: transaction.apartmentNameFromSource,
-    address_from_source: transaction.addressFromSource,
-    cancel_yn: transaction.cancelYn,
-    cancel_date: transaction.cancelDate,
-    confidence_level: "high",
-    fetched_at: new Date().toISOString(),
-  };
-}
-
-function getTransactionSourceHash(
-  apartmentId: string,
-  transaction: MolitApartmentTrade,
-) {
-  return hashText(
-    [
-      apartmentId,
-      transaction.aptSeq ?? "",
-      transaction.aptDong ?? "",
-      transaction.dealDate,
-      transaction.exclusiveAreaM2,
-      transaction.floor ?? "",
-      transaction.dealAmountManwon,
-      normalizeApartmentNameForMolit(transaction.apartmentNameFromSource),
-      transaction.addressFromSource ?? "",
-    ].join("|"),
-  );
-}
-
-function hashText(value: string) {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function getBearerToken(request: Request) {

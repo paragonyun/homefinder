@@ -406,17 +406,13 @@ export function NeighborhoodDetailClient({
         </p>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <DetailMetric label="검토 단지" value={`${neighborhood.apartmentCount}개`} />
         <DetailMetric
           label="관심/후보"
           value={`${neighborhood.interestedCount}/${neighborhood.candidateCount}`}
         />
         <DetailMetric label="가격 범위" value={neighborhood.priceRangeLabel} />
-        <DetailMetric
-          label="접근성"
-          value={`${neighborhood.gangnamSummary} · ${neighborhood.yeouidoSummary}`}
-        />
       </section>
 
       <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">

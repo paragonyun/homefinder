@@ -858,24 +858,24 @@ function CommuteInputs({
   return (
     <div className="grid gap-3 rounded-md border border-slate-200 bg-white p-3">
       <p className="text-sm font-semibold text-slate-800">{title}</p>
-      <div className="grid grid-cols-2 gap-2">
-        <label className="grid gap-1 text-xs font-medium text-slate-600">
+      <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+        <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-600">
           소요시간
           <input
             value={durationValue}
             onChange={(event) => onDurationChange(event.target.value)}
             inputMode="numeric"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm"
             placeholder="분"
           />
         </label>
-        <label className="grid gap-1 text-xs font-medium text-slate-600">
+        <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-600">
           환승
           <input
             value={transferValue}
             onChange={(event) => onTransferChange(event.target.value)}
             inputMode="numeric"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="min-w-0 rounded-md border border-slate-300 px-3 py-2 text-sm"
             placeholder="회"
           />
         </label>

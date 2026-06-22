@@ -8,8 +8,6 @@ type NeighborhoodCardProps = {
   onHold: number;
   excluded: number;
   avgPriceRange: string;
-  yeouidoSummary: string;
-  gangnamSummary: string;
   updatedAt: string;
 };
 
@@ -30,7 +28,7 @@ export function NeighborhoodCard(props: Readonly<NeighborhoodCardProps>) {
         </span>
       </div>
 
-      <dl className="mt-5 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+      <dl className="mt-5 grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
         <div>
           <dt className="text-slate-500">관심 단지</dt>
           <dd className="mt-1 font-semibold text-slate-950">{props.apartments}개</dd>
@@ -47,20 +45,7 @@ export function NeighborhoodCard(props: Readonly<NeighborhoodCardProps>) {
             {props.avgPriceRange}
           </dd>
         </div>
-        <div>
-          <dt className="text-slate-500">접근성</dt>
-          <dd className="mt-1 font-semibold text-slate-950">검증 예정</dd>
-        </div>
       </dl>
-
-      <div className="mt-5 grid gap-3 text-sm md:grid-cols-2">
-        <p className="rounded-md bg-emerald-50 px-3 py-2 text-emerald-900">
-          여의도: {props.yeouidoSummary}
-        </p>
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-900">
-          강남: {props.gangnamSummary}
-        </p>
-      </div>
     </article>
   );
 }

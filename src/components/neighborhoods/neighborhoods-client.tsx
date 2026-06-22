@@ -133,8 +133,6 @@ export function NeighborhoodsClient() {
           (apartment) => apartment.status === "excluded",
         ).length,
         avgPriceRange: "실거래가 연동 전",
-        yeouidoSummary: "계산 예정",
-        gangnamSummary: "계산 예정",
         updatedAt: neighborhood.updated_at,
       };
     });

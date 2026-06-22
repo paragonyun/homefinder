@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
@@ -18,22 +17,22 @@ import {
   type KaptCodeDirectoryRow,
 } from "@/lib/services/kapt-code-directory";
 import {
-  resolveKaptCodeCandidate,
-  type ScoredKaptCodeCandidate,
-} from "@/lib/services/kapt-code-resolver";
+  buildKaptResolveRawResponsePayload,
+  dedupeKaptItems,
+  KAPT_DIRECTORY_ENDPOINT,
+  KAPT_DIRECTORY_SOURCE_NAME,
+  KAPT_LIST_SOURCE_NAME,
+  mergeKaptListResults,
+  toPublicKaptCandidate,
+  type KaptListResult,
+} from "@/lib/services/apartment-kapt-code-sync";
+import { resolveKaptCodeCandidate } from "@/lib/services/kapt-code-resolver";
 import {
   createSupabaseRouteClient,
   isSupabaseServerConfigured,
 } from "@/lib/supabase/server";
 
-const KAPT_LIST_SOURCE_NAME = "kapt-apartment-list";
-const KAPT_DIRECTORY_SOURCE_NAME = "kapt-code-directory";
-const KAPT_DIRECTORY_ENDPOINT = "supabase:kapt_code_directory";
-
 type SupabaseRouteClient = NonNullable<ReturnType<typeof createSupabaseRouteClient>>;
-type KaptListResult = KaptApartmentListFetchResult & {
-  source: string;
-};
 
 export async function POST(
   request: Request,
@@ -185,7 +184,7 @@ export async function POST(
 
     return NextResponse.json({
       applied: true,
-      selected: toPublicCandidate({
+      selected: toPublicKaptCandidate({
         ...selected,
         score: 0,
         reasons: ["사용자 선택"],
@@ -246,8 +245,8 @@ export async function POST(
 
   return NextResponse.json({
     applied: resolution.status === "auto",
-    selected: resolution.selected ? toPublicCandidate(resolution.selected) : null,
-    candidates: resolution.candidates.map(toPublicCandidate),
+    selected: resolution.selected ? toPublicKaptCandidate(resolution.selected) : null,
+    candidates: resolution.candidates.map(toPublicKaptCandidate),
     reason:
       resolution.status === "none" && externalErrorMessage
         ? `K-apt 후보를 찾지 못했습니다. 목록 API 오류: ${externalErrorMessage}`
@@ -473,32 +472,16 @@ async function insertRawResolutionLog({
   resolution: ReturnType<typeof resolveKaptCodeCandidate>;
   externalErrorMessage: string | null;
 }) {
-  const { error } = await supabase.from("raw_api_responses").insert({
-    provider: "kapt",
-    endpoint: listResult.endpoint,
-    request_hash: hashText(
-      JSON.stringify({
-        apartmentId,
-        lawdCd,
-        source: listResult.source,
-      }),
-    ),
-    request_params: {
+  const { error } = await supabase.from("raw_api_responses").insert(
+    buildKaptResolveRawResponsePayload({
       apartmentId,
-      lawdCd,
-      source: listResult.source,
-    },
-    response_body: {
-      totalCount: listResult.totalCount,
-      status: resolution.status,
-      selected: resolution.selected ? toPublicCandidate(resolution.selected) : null,
-      candidates: resolution.candidates.map(toPublicCandidate),
-      reason: resolution.reason,
       externalErrorMessage,
-    },
-    apartment_id: apartmentId,
-    user_id: userId,
-  });
+      lawdCd,
+      listResult,
+      resolution,
+      userId,
+    }),
+  );
 
   if (!error) {
     return null;
@@ -506,59 +489,6 @@ async function insertRawResolutionLog({
 
   console.warn("Failed to store K-apt resolve raw response", error);
   return error.message;
-}
-
-function mergeKaptListResults(results: KaptListResult[]): KaptListResult {
-  const items = dedupeKaptItems(results.flatMap((result) => result.items));
-
-  return {
-    endpoint: results.map((result) => result.endpoint).join(","),
-    source: results.map((result) => result.source).join(","),
-    totalCount: items.length,
-    items,
-  };
-}
-
-function dedupeKaptItems(items: KaptApartmentListItem[]) {
-  const byCode = new Map<string, KaptApartmentListItem>();
-
-  for (const item of items) {
-    const existing = byCode.get(item.kaptCode);
-
-    byCode.set(item.kaptCode, {
-      ...existing,
-      ...item,
-      bjdCode: item.bjdCode ?? existing?.bjdCode ?? null,
-      sido: item.sido ?? existing?.sido ?? null,
-      sigungu: item.sigungu ?? existing?.sigungu ?? null,
-      eupmyeondong: item.eupmyeondong ?? existing?.eupmyeondong ?? null,
-      ri: item.ri ?? existing?.ri ?? null,
-      legalAddress: item.legalAddress ?? existing?.legalAddress ?? null,
-      roadAddress: item.roadAddress ?? existing?.roadAddress ?? null,
-    });
-  }
-
-  return Array.from(byCode.values());
-}
-
-function toPublicCandidate(candidate: ScoredKaptCodeCandidate) {
-  return {
-    kaptCode: candidate.kaptCode,
-    kaptName: candidate.kaptName,
-    bjdCode: candidate.bjdCode,
-    sido: candidate.sido,
-    sigungu: candidate.sigungu,
-    eupmyeondong: candidate.eupmyeondong,
-    ri: candidate.ri,
-    legalAddress: candidate.legalAddress ?? null,
-    roadAddress: candidate.roadAddress ?? null,
-    score: candidate.score,
-    reasons: candidate.reasons,
-  };
-}
-
-function hashText(value: string) {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function getBearerToken(request: Request) {

@@ -7,6 +7,10 @@ import {
   getNextWeekday0730SearchDttm,
   type TmapCommuteResult,
 } from "@/lib/data-providers/tmap-commute";
+import {
+  findFreshTmapCommuteCache,
+  type CommuteCacheRow,
+} from "@/lib/services/commute-refresh-cache";
 import { encodeCommuteSourceMetadata } from "@/lib/services/commute-source-metadata";
 import {
   createSupabaseRouteClient,
@@ -42,17 +46,6 @@ export async function POST(
   if (!isSupabaseServerConfigured) {
     return NextResponse.json(
       { error: "Supabase 환경변수가 설정되지 않았습니다." },
-      { status: 503 },
-    );
-  }
-
-  const transitApiKey = process.env.TMAP_TRANSIT_API_KEY ?? process.env.TMAP_API_KEY;
-  const drivingApiKey = process.env.TMAP_DRIVING_API_KEY ?? process.env.TMAP_API_KEY;
-  const geocodeApiKey = process.env.TMAP_API_KEY ?? drivingApiKey ?? transitApiKey;
-
-  if (!transitApiKey || !drivingApiKey || !geocodeApiKey) {
-    return NextResponse.json(
-      { error: "TMAP_API_KEY가 설정되지 않았습니다." },
       { status: 503 },
     );
   }
@@ -101,6 +94,57 @@ export async function POST(
 
   if (!apartment) {
     return NextResponse.json({ error: "단지를 찾을 수 없습니다." }, { status: 404 });
+  }
+
+  const requestBody = await readJsonBody(request);
+  const forceRefresh = requestBody.forceRefresh === true;
+
+  if (!forceRefresh) {
+    const { data: cachedRows, error: cacheError } = await supabase
+      .from("commute_times")
+      .select(
+        "id,apartment_id,destination_key,transport_type,duration_minutes,source_ref,fetched_at",
+      )
+      .eq("apartment_id", apartmentId)
+      .order("fetched_at", { ascending: false });
+
+    if (cacheError) {
+      if (isMissingTableError(cacheError)) {
+        return NextResponse.json(
+          { error: "commute_times migration이 적용되지 않았습니다." },
+          { status: 503 },
+        );
+      }
+
+      return NextResponse.json({ error: cacheError.message }, { status: 500 });
+    }
+
+    const freshCache = findFreshTmapCommuteCache(
+      (cachedRows ?? []) as CommuteCacheRow[],
+    );
+
+    if (freshCache.cached) {
+      return NextResponse.json({
+        synced: true,
+        cached: true,
+        reusedCount: freshCache.rows.length,
+        savedCount: 0,
+        errors: [],
+        fetchedAt: freshCache.fetchedAt,
+        expiresAt: freshCache.expiresAt,
+      });
+    }
+  }
+
+  const transitApiKey = process.env.TMAP_TRANSIT_API_KEY ?? process.env.TMAP_API_KEY;
+  const drivingApiKey = process.env.TMAP_DRIVING_API_KEY ?? process.env.TMAP_API_KEY;
+  const geocodeApiKey = process.env.TMAP_API_KEY ?? drivingApiKey ?? transitApiKey;
+
+  if (!transitApiKey || !drivingApiKey || !geocodeApiKey) {
+    return NextResponse.json(
+      { error: "TMAP_API_KEY가 설정되지 않았습니다." },
+      { status: 503 },
+    );
   }
 
   let startCoordinate;
@@ -300,6 +344,14 @@ function getBearerToken(request: Request) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "접근성 조회에 실패했습니다.";
+}
+
+async function readJsonBody(request: Request) {
+  try {
+    return (await request.json()) as { forceRefresh?: unknown };
+  } catch {
+    return {};
+  }
 }
 
 function isMissingTableError(error: { code?: string }) {

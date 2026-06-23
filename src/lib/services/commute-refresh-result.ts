@@ -7,7 +7,9 @@ type CommuteRefreshError = {
 };
 
 export type CommuteRefreshResult = {
+  cached?: boolean;
   error?: string;
+  reusedCount?: number;
   savedCount?: number;
   errors?: CommuteRefreshError[];
   searchDttm?: string;
@@ -15,6 +17,15 @@ export type CommuteRefreshResult = {
 };
 
 export function formatCommuteRefreshMessage(result: CommuteRefreshResult) {
+  if (result.cached) {
+    const reusedCount = result.reusedCount ?? 0;
+    const expireMessage = result.expiresAt
+      ? `자동 조회값은 ${formatDate(result.expiresAt)}까지 표시됩니다.`
+      : "자동 조회값은 24시간 동안 표시됩니다.";
+
+    return `저장된 접근성 ${reusedCount}건을 재사용했습니다. ${expireMessage}`;
+  }
+
   const savedCount = result.savedCount ?? 0;
   const failedCount = result.errors?.length ?? 0;
   const baseMessage = `접근성 ${savedCount}건을 TMAP 기준으로 조회했습니다.`;

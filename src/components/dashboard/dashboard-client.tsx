@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthPanel } from "@/components/auth/auth-panel";
+import { DashboardMapPanel } from "@/components/dashboard/dashboard-map";
 import { StatusPill } from "@/components/ui/status-pill";
 import {
   buildDashboardModel,
@@ -63,6 +64,8 @@ const mockDashboardModel = buildDashboardModel({
       name: "관악드림타운",
       display_name: null,
       address: "서울 관악구 성현로 80",
+      lat: 37.488,
+      lng: 126.951,
       status: "interested",
       memo: "강남 접근성과 대단지 규모를 함께 확인",
     },
@@ -72,6 +75,8 @@ const mockDashboardModel = buildDashboardModel({
       name: "염창 동아 3차",
       display_name: null,
       address: "서울 강서구 양천로 731",
+      lat: 37.554,
+      lng: 126.872,
       status: "interested",
       memo: "여의도 접근성 우선 후보",
     },
@@ -81,6 +86,8 @@ const mockDashboardModel = buildDashboardModel({
       name: "보라매경남아너스빌",
       display_name: null,
       address: "서울 영등포구 여의대방로 25",
+      lat: 37.5,
+      lng: 126.92,
       status: "candidate",
       memo: "보라매 권역 비교 후보",
     },
@@ -164,7 +171,7 @@ export function DashboardClient() {
     const { data: apartmentRows, error: apartmentError } = await supabase
       .from("apartments")
       .select(
-        "id,neighborhood_id,name,display_name,address,status,memo,updated_at",
+        "id,neighborhood_id,name,display_name,address,lat,lng,status,memo,updated_at",
       )
       .order("updated_at", { ascending: false });
 
@@ -255,6 +262,13 @@ export function DashboardClient() {
     () => !isSupabaseConfigured || !session,
     [session],
   );
+  const mapApartments = useMemo(
+    () =>
+      model.neighborhoods.flatMap(
+        (neighborhood) => neighborhood.apartmentSummaries,
+      ),
+    [model],
+  );
 
   return (
     <div className="grid min-w-0 gap-5">
@@ -313,6 +327,7 @@ export function DashboardClient() {
       ) : null}
 
       <PortfolioSummaryStrip model={model} />
+      <DashboardMapPanel apartments={mapApartments} />
 
       {model.summary.neighborhoods === 0 && !isPreview ? (
         <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600">
@@ -621,6 +636,8 @@ function toDashboardApartment(row: ApartmentRowData): DashboardApartment {
     name: row.name,
     display_name: row.display_name,
     address: row.address,
+    lat: row.lat,
+    lng: row.lng,
     status: row.status,
     memo: row.memo,
   };

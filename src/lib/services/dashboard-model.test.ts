@@ -235,6 +235,29 @@ describe("buildDashboardModel", () => {
     expect(model.priorityApartments[0].evidence.join(" ")).not.toContain("0%");
   });
 
+  it("keeps apartment coordinates for dashboard map pins", () => {
+    const model = buildDashboardModel({
+      apartments: [
+        {
+          ...apartments[0],
+          lat: 37.488,
+          lng: 126.951,
+        },
+      ],
+      basicInfos: [],
+      buildingInfos: [],
+      commuteTimes: [],
+      neighborhoods,
+      transactions: [],
+    });
+
+    expect(model.priorityApartments[0]).toMatchObject({
+      id: "dream",
+      lat: 37.488,
+      lng: 126.951,
+    });
+  });
+
   it("scores priority apartments with field notes and missing data warnings", () => {
     const model = buildDashboardModel({
       apartments,

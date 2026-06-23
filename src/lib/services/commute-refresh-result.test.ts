@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { formatCommuteRefreshMessage } from "./commute-refresh-result";
 
 describe("formatCommuteRefreshMessage", () => {
+  it("reports fresh cache reuse without claiming a new TMAP lookup", () => {
+    const message = formatCommuteRefreshMessage({
+      cached: true,
+      reusedCount: 4,
+      expiresAt: "2026-06-24T00:00:00.000Z",
+    });
+
+    expect(message).toContain("저장된 접근성 4건을 재사용했습니다.");
+    expect(message).not.toContain("TMAP 기준으로 조회");
+  });
+
   it("includes per-destination transit failure details", () => {
     expect(
       formatCommuteRefreshMessage({

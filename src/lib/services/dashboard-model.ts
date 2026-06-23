@@ -25,6 +25,8 @@ export type DashboardApartment = {
   name: string;
   display_name: string | null;
   address: string | null;
+  lat?: number | null;
+  lng?: number | null;
   status: ApartmentStatus;
   memo: string | null;
 };
@@ -73,6 +75,8 @@ export type DashboardApartmentSummary = {
   id: string;
   name: string;
   address: string | null;
+  lat: number | null;
+  lng: number | null;
   status: ApartmentStatus;
   latestPriceKrw: number | null;
   latestDealDate: string | null;
@@ -308,6 +312,8 @@ function summarizeApartment({
     id: apartment.id,
     name: apartment.display_name ?? apartment.name,
     address: apartment.address,
+    lat: apartment.lat ?? null,
+    lng: apartment.lng ?? null,
     status: apartment.status,
     latestPriceKrw,
     latestDealDate: latestTransaction?.deal_date ?? null,

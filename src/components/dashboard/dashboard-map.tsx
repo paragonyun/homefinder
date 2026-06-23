@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import {
   calculateDashboardMapViewport,
   getDashboardMapPins,
+  shouldStartDashboardMapDrag,
   type DashboardMapPin,
 } from "@/lib/services/dashboard-map";
 import type { DashboardApartmentSummary } from "@/lib/services/dashboard-model";
@@ -114,7 +115,7 @@ function DashboardMapCanvas({
 
       setMapSize({
         width: Math.max(320, entry.contentRect.width),
-        height: Math.max(340, entry.contentRect.height),
+        height: Math.max(280, entry.contentRect.height),
       });
     });
 
@@ -136,7 +137,16 @@ function DashboardMapCanvas({
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) {
+    const targetIsInteractive =
+      event.target instanceof Element &&
+      Boolean(event.target.closest("button, a"));
+
+    if (
+      !shouldStartDashboardMapDrag({
+        button: event.button,
+        targetIsInteractive,
+      })
+    ) {
       return;
     }
 
@@ -174,18 +184,19 @@ function DashboardMapCanvas({
   };
 
   return (
-    <div
-      ref={mapRef}
-      className="relative mt-4 h-[360px] min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 touch-none sm:h-[420px]"
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerEnd}
-      onPointerCancel={handlePointerEnd}
-      onWheel={(event) => {
-        event.preventDefault();
-        updateZoom(event.deltaY < 0 ? 1 : -1);
-      }}
-    >
+    <>
+      <div
+        ref={mapRef}
+        className="relative mt-4 h-[300px] min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 touch-none sm:h-[420px]"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+        onWheel={(event) => {
+          event.preventDefault();
+          updateZoom(event.deltaY < 0 ? 1 : -1);
+        }}
+      >
         {tiles.map((tile) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -224,7 +235,11 @@ function DashboardMapCanvas({
               key={pin.id}
               type="button"
               aria-label={`${pin.name} 지도 핀`}
-              className={`absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg ring-2 ring-white/70 transition hover:scale-110 focus:outline-none focus:ring-4 ${getPinColorClass(
+              className={`absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg transition hover:scale-110 focus:outline-none focus:ring-4 ${
+                pin.id === selectedId
+                  ? "scale-125 ring-4 ring-slate-950/35"
+                  : "ring-2 ring-white/70"
+              } ${getPinColorClass(
                 pin,
               )}`}
               onClick={(event) => {
@@ -236,7 +251,9 @@ function DashboardMapCanvas({
           );
         })}
 
-        {selectedPin ? <SelectedApartmentPanel pin={selectedPin} /> : null}
+        {selectedPin ? (
+          <SelectedApartmentPanel placement="overlay" pin={selectedPin} />
+        ) : null}
 
         <div className="absolute left-3 top-3 z-20 grid overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm">
           <button
@@ -260,7 +277,11 @@ function DashboardMapCanvas({
         <div className="absolute bottom-2 left-2 z-20 rounded bg-white/90 px-2 py-1 text-[11px] font-medium text-slate-600 shadow-sm">
           © OpenStreetMap contributors
         </div>
-    </div>
+      </div>
+      {selectedPin ? (
+        <SelectedApartmentPanel placement="mobile" pin={selectedPin} />
+      ) : null}
+    </>
   );
 }
 
@@ -268,9 +289,20 @@ function getMapResetKey(pins: DashboardMapPin[]) {
   return pins.map((pin) => `${pin.id}:${pin.lat}:${pin.lng}`).join("|");
 }
 
-function SelectedApartmentPanel({ pin }: Readonly<{ pin: DashboardMapPin }>) {
+function SelectedApartmentPanel({
+  pin,
+  placement,
+}: Readonly<{
+  pin: DashboardMapPin;
+  placement: "mobile" | "overlay";
+}>) {
+  const panelClassName =
+    placement === "overlay"
+      ? "absolute right-3 top-3 z-20 hidden w-72 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur sm:block"
+      : "mt-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:hidden";
+
   return (
-    <div className="absolute inset-x-3 bottom-8 z-20 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur sm:inset-auto sm:right-3 sm:top-3 sm:w-72">
+    <div className={panelClassName}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-keep text-sm font-semibold text-slate-950">

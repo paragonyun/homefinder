@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calculateDashboardMapViewport,
   getDashboardMapPins,
+  shouldStartDashboardMapDrag,
 } from "./dashboard-map";
 
 describe("getDashboardMapPins", () => {
@@ -95,5 +96,28 @@ describe("calculateDashboardMapViewport", () => {
       centerLng: 126.978,
       zoom: 11,
     });
+  });
+});
+
+describe("shouldStartDashboardMapDrag", () => {
+  it("starts dragging only from the map background with the primary button", () => {
+    expect(
+      shouldStartDashboardMapDrag({
+        button: 0,
+        targetIsInteractive: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldStartDashboardMapDrag({
+        button: 0,
+        targetIsInteractive: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldStartDashboardMapDrag({
+        button: 2,
+        targetIsInteractive: false,
+      }),
+    ).toBe(false);
   });
 });

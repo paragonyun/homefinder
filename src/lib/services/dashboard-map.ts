@@ -63,6 +63,16 @@ export function calculateDashboardMapViewport(
   };
 }
 
+export function shouldStartDashboardMapDrag({
+  button,
+  targetIsInteractive,
+}: {
+  button: number;
+  targetIsInteractive: boolean;
+}) {
+  return button === 0 && !targetIsInteractive;
+}
+
 function isFiniteCoordinate(
   lat: number | null,
   lng: number | null,

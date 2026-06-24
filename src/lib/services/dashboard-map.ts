@@ -39,6 +39,15 @@ export function getDashboardMapPins(
   );
 }
 
+export function filterDashboardMapApartments(
+  apartments: DashboardMapApartmentInput[],
+  showExcluded: boolean,
+) {
+  return showExcluded
+    ? apartments
+    : apartments.filter((apartment) => apartment.status !== "excluded");
+}
+
 export function calculateDashboardMapViewport(
   pins: DashboardMapPin[],
 ): DashboardMapViewport {

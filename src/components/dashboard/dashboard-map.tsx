@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StatusPill } from "@/components/ui/status-pill";
 import {
   calculateDashboardMapViewport,
+  filterDashboardMapApartments,
   getDashboardMapPins,
   shouldStartDashboardMapDrag,
   type DashboardMapPin,
@@ -30,6 +31,7 @@ type Point = {
 export function DashboardMapPanel({
   apartments,
 }: Readonly<DashboardMapPanelProps>) {
+  const [showExcluded, setShowExcluded] = useState(false);
   const mapApartments = useMemo(
     () =>
       apartments.map((apartment) => ({
@@ -47,9 +49,19 @@ export function DashboardMapPanel({
       })),
     [apartments],
   );
-  const pins = useMemo(() => getDashboardMapPins(mapApartments), [mapApartments]);
+  const visibleApartments = useMemo(
+    () => filterDashboardMapApartments(mapApartments, showExcluded),
+    [mapApartments, showExcluded],
+  );
+  const pins = useMemo(
+    () => getDashboardMapPins(visibleApartments),
+    [visibleApartments],
+  );
   const viewport = useMemo(() => calculateDashboardMapViewport(pins), [pins]);
-  const missingCoordinateCount = mapApartments.length - pins.length;
+  const missingCoordinateCount = visibleApartments.length - pins.length;
+  const excludedCount = mapApartments.filter(
+    (apartment) => apartment.status === "excluded",
+  ).length;
 
   return (
     <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -65,11 +77,36 @@ export function DashboardMapPanel({
             좌표가 저장된 {pins.length.toLocaleString("ko-KR")}개 단지를 표시합니다.
           </p>
         </div>
-        {missingCoordinateCount > 0 ? (
-          <span className="w-fit rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
-            좌표 미확인 {missingCoordinateCount.toLocaleString("ko-KR")}개
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {missingCoordinateCount > 0 ? (
+            <span className="w-fit rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+              좌표 미확인 {missingCoordinateCount.toLocaleString("ko-KR")}개
+            </span>
+          ) : null}
+          {excludedCount > 0 ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showExcluded}
+              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              onClick={() => setShowExcluded((current) => !current)}
+            >
+              <span
+                aria-hidden="true"
+                className={`relative h-5 w-9 rounded-full transition ${
+                  showExcluded ? "bg-slate-700" : "bg-slate-200"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition ${
+                    showExcluded ? "left-[18px]" : "left-0.5"
+                  }`}
+                />
+              </span>
+              제외 단지 표시
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <DashboardMapCanvas

@@ -258,6 +258,43 @@ describe("buildDashboardModel", () => {
     });
   });
 
+  it("keeps all stored apartments for the dashboard map", () => {
+    const model = buildDashboardModel({
+      apartments: [
+        {
+          ...apartments[0],
+          lat: 37.488,
+          lng: 126.951,
+        },
+        {
+          ...apartments[1],
+          id: "unassigned",
+          neighborhood_id: null,
+          lat: 37.5,
+          lng: 126.92,
+        },
+        {
+          ...apartments[2],
+          id: "excluded",
+          status: "excluded",
+          lat: 37.554,
+          lng: 126.872,
+        },
+      ],
+      basicInfos: [],
+      buildingInfos: [],
+      commuteTimes: [],
+      neighborhoods,
+      transactions: [],
+    });
+
+    expect(model.apartments.map((item) => item.id)).toEqual([
+      "dream",
+      "unassigned",
+      "excluded",
+    ]);
+  });
+
   it("scores priority apartments with field notes and missing data warnings", () => {
     const model = buildDashboardModel({
       apartments,

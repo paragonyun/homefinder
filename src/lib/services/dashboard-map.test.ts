@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateDashboardMapViewport,
+  filterDashboardMapApartments,
   getDashboardMapPins,
   shouldStartDashboardMapDrag,
 } from "./dashboard-map";
@@ -51,6 +52,46 @@ describe("getDashboardMapPins", () => {
         score: 71,
       },
     ]);
+  });
+});
+
+describe("filterDashboardMapApartments", () => {
+  const apartments = [
+    {
+      id: "active",
+      name: "Active",
+      address: "Seoul",
+      lat: 37.5,
+      lng: 126.9,
+      status: "interested" as const,
+      latestPriceKrw: null,
+      latestDealDate: null,
+      gangnamMinutes: null,
+      yeouidoMinutes: null,
+      score: 71,
+    },
+    {
+      id: "excluded",
+      name: "Excluded",
+      address: "Seoul",
+      lat: 37.6,
+      lng: 127,
+      status: "excluded" as const,
+      latestPriceKrw: null,
+      latestDealDate: null,
+      gangnamMinutes: null,
+      yeouidoMinutes: null,
+      score: 30,
+    },
+  ];
+
+  it("hides excluded apartments by default and includes them when enabled", () => {
+    expect(
+      filterDashboardMapApartments(apartments, false).map((item) => item.id),
+    ).toEqual(["active"]);
+    expect(
+      filterDashboardMapApartments(apartments, true).map((item) => item.id),
+    ).toEqual(["active", "excluded"]);
   });
 });
 

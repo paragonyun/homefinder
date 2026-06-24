@@ -262,14 +262,6 @@ export function DashboardClient() {
     () => !isSupabaseConfigured || !session,
     [session],
   );
-  const mapApartments = useMemo(
-    () =>
-      model.neighborhoods.flatMap(
-        (neighborhood) => neighborhood.apartmentSummaries,
-      ),
-    [model],
-  );
-
   return (
     <div className="grid min-w-0 gap-5">
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -327,7 +319,7 @@ export function DashboardClient() {
       ) : null}
 
       <PortfolioSummaryStrip model={model} />
-      <DashboardMapPanel apartments={mapApartments} />
+      <DashboardMapPanel apartments={model.apartments} />
 
       {model.summary.neighborhoods === 0 && !isPreview ? (
         <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600">

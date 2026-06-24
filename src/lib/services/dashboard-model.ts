@@ -115,6 +115,7 @@ export type DashboardModel = {
     withPrice: number;
     withCommute: number;
   };
+  apartments: DashboardApartmentSummary[];
   neighborhoods: DashboardNeighborhoodSummary[];
   priorityApartments: DashboardApartmentSummary[];
 };
@@ -183,6 +184,7 @@ export function buildDashboardModel(input: DashboardModelInput): DashboardModel 
           summary.gangnamMinutes !== null || summary.yeouidoMinutes !== null,
       ).length,
     },
+    apartments: apartmentSummaries,
     neighborhoods: neighborhoodSummaries,
     priorityApartments: rankPriorityApartments(apartmentSummaries),
   };

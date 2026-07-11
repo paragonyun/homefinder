@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { formatLoginErrorMessage } from "@/lib/auth/login-error";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
 import {
   createSupabaseBrowserClient,
@@ -51,13 +52,18 @@ export function AuthPanel() {
     setIsPending(true);
     setMessage(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    setIsPending(false);
-    setMessage(error ? error.message : null);
+      setMessage(error ? formatLoginErrorMessage(error) : null);
+    } catch (error) {
+      setMessage(formatLoginErrorMessage(error));
+    } finally {
+      setIsPending(false);
+    }
   }
 
   async function handleLogout() {

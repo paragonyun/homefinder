@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint src scripts eslint.config.mjs next.config.ts postcss.config.mjs --max-warnings=0",
     "audit:operating-data": "node scripts/audit-operating-data.mjs",
     "sync:kapt-directory": "node scripts/sync-kapt-code-directory.mjs",
     "test": "vitest run"

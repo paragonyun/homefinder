@@ -28,17 +28,26 @@ git status --short
 - Git
 - Supabase CLI는 선택 사항이지만 migration 적용에는 유용합니다.
 
-이 repo에는 `.nvmrc`가 있고 값은 `20`입니다.
+이 repo에는 `.nvmrc`가 있고 값은 `20`입니다. 이미 `nvm`, `fnm`, `asdf` 같은 Node 버전 관리자를 쓰고 있다면 Node 20 이상을 선택하세요.
+
+가장 단순한 Homebrew 설치:
 
 ```bash
-brew install nvm
+brew install node
+node --version
+npm --version
+```
+
+`nvm`을 이미 설정해 둔 경우:
+
+```bash
 nvm install 20
 nvm use 20
 node --version
 npm --version
 ```
 
-Node 20.9 미만에서는 Next.js 16 test/build/dev가 실패할 수 있습니다.
+Node 20.9 미만에서는 Next.js 16 test/build/dev가 실패할 수 있습니다. `node --version`이 `v20.9.0` 이상인지 먼저 확인하세요.
 
 ## 의존성 설치와 실행
 
@@ -91,6 +100,8 @@ NEXT_PUBLIC_APP_URL=
 새 Supabase 프로젝트 또는 새 Mac에서 연결을 다시 잡는 경우 migration을 적용합니다.
 
 ```bash
+supabase login
+supabase link --project-ref <your-project-ref>
 supabase db push
 ```
 

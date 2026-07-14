@@ -17,6 +17,8 @@ export type MolitApartmentTrade = {
   dealAmountKrw: number;
   apartmentNameFromSource: string | null;
   addressFromSource: string | null;
+  lotNumberFromSource?: string | null;
+  roadAddressFromSource?: string | null;
   cancelYn: string | null;
   cancelDate: string | null;
   aptSeq?: string | null;
@@ -402,6 +404,19 @@ function normalizeMolitTradeRecord(record: MolitXmlRecord): MolitApartmentTrade 
   );
   const umdName = cleanText(readFirst(record, ["umdNm", "법정동"]));
   const jibun = cleanText(readFirst(record, ["jibun", "지번"]));
+  const roadName = cleanText(readFirst(record, ["roadNm", "도로명"]));
+  const roadMain = parseInteger(
+    readFirst(record, ["roadNmBonbun", "도로명건물본번호코드"]),
+  );
+  const roadSub = parseInteger(
+    readFirst(record, ["roadNmBubun", "도로명건물부번호코드"]),
+  );
+  const roadBuildingNumber =
+    roadMain === null
+      ? null
+      : roadSub && roadSub > 0
+        ? `${roadMain}-${roadSub}`
+        : String(roadMain);
   const trade: MolitApartmentTrade = {
     dealYear,
     dealMonth,
@@ -417,6 +432,12 @@ function normalizeMolitTradeRecord(record: MolitXmlRecord): MolitApartmentTrade 
     cancelDate: parseCompactDate(readFirst(record, ["cdealDay", "해제사유발생일"])),
   };
 
+  setOptional(trade, "lotNumberFromSource", jibun);
+  setOptional(
+    trade,
+    "roadAddressFromSource",
+    [roadName, roadBuildingNumber].filter(Boolean).join(" ") || null,
+  );
   setOptional(trade, "aptSeq", cleanText(readFirst(record, ["aptSeq"])));
   setOptional(trade, "aptDong", cleanText(readFirst(record, ["aptDong"])));
   setOptional(trade, "sggCd", cleanText(readFirst(record, ["sggCd"])));

@@ -52,10 +52,45 @@ describe("parseMolitApartmentTradeXml", () => {
           dealAmountKrw: 845000000,
           apartmentNameFromSource: "래미안에스티움",
           addressFromSource: "신길동 2039",
+          lotNumberFromSource: "2039",
           cancelYn: null,
           cancelDate: null,
         },
       ],
+    });
+  });
+
+  it("normalizes structured lot and road address evidence", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <response>
+        <body>
+          <items>
+            <item>
+              <dealAmount>84,500</dealAmount>
+              <dealYear>2024</dealYear>
+              <dealMonth>7</dealMonth>
+              <dealDay>3</dealDay>
+              <excluUseAr>84.93</excluUseAr>
+              <floor>12</floor>
+              <aptNm>돈암동삼성</aptNm>
+              <umdNm>돈암동</umdNm>
+              <jibun>15-1</jibun>
+              <roadNm>동소문로34길</roadNm>
+              <roadNmBonbun>24</roadNmBonbun>
+              <roadNmBubun>0</roadNmBubun>
+            </item>
+          </items>
+          <totalCount>1</totalCount>
+        </body>
+      </response>`;
+
+    const result = parseMolitApartmentTradeXml(xml);
+
+    expect(result.transactions[0]).toMatchObject({
+      apartmentNameFromSource: "돈암동삼성",
+      addressFromSource: "돈암동 15-1",
+      lotNumberFromSource: "15-1",
+      roadAddressFromSource: "동소문로34길 24",
     });
   });
 

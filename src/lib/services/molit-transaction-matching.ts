@@ -5,8 +5,13 @@ import {
 
 export type MolitAddressHints = {
   lotNumbers: string[];
-  roadBuildingNumbers: string[];
+  roadAddressPairs: MolitRoadAddressPair[];
   legalDongNames: string[];
+};
+
+export type MolitRoadAddressPair = {
+  roadName: string;
+  buildingNumber: string;
 };
 
 export type MolitMatchReason =
@@ -200,7 +205,7 @@ function evaluateSourceEvidence(
   const lotNumber = normalizeMolitAddressNumber(
     transaction.lotNumberFromSource ?? extractLegalLotNumber(transaction.addressFromSource),
   );
-  const roadBuildingNumber = extractRoadBuildingNumber(
+  const roadAddressPair = extractRoadAddressPair(
     transaction.roadAddressFromSource,
   );
   const lotExact =
@@ -209,9 +214,13 @@ function evaluateSourceEvidence(
       (candidate) => normalizeMolitAddressNumber(candidate) === lotNumber,
     );
   const roadExact =
-    roadBuildingNumber !== null &&
-    addressHints.roadBuildingNumbers.some(
-      (candidate) => normalizeMolitAddressNumber(candidate) === roadBuildingNumber,
+    roadAddressPair !== null &&
+    addressHints.roadAddressPairs.some(
+      (candidate) =>
+        normalizeApartmentNameForMolit(candidate.roadName) ===
+          roadAddressPair.roadName &&
+        normalizeMolitAddressNumber(candidate.buildingNumber) ===
+          roadAddressPair.buildingNumber,
     );
   const { exact: nameExact, similarity: nameSimilarity } = evaluateNameSimilarity(
     transaction.apartmentNameFromSource,
@@ -232,6 +241,12 @@ function evaluateNameSimilarity(
   targetNames: string[],
   legalDongNames: string[],
 ) {
+  const normalizedSource = normalizeApartmentNameForMolit(sourceName);
+  const normalizedTargets = targetNames
+    .map((targetName) => normalizeApartmentNameForMolit(targetName))
+    .filter(Boolean);
+  const nameExact =
+    normalizedSource.length > 0 && normalizedTargets.includes(normalizedSource);
   const sourceVariants = getComparableNameVariants(sourceName, legalDongNames);
   const targetVariants = targetNames.flatMap((targetName) =>
     getComparableNameVariants(targetName, legalDongNames),
@@ -241,14 +256,15 @@ function evaluateNameSimilarity(
   for (const source of sourceVariants) {
     for (const target of targetVariants) {
       if (source === target) {
-        return { exact: true, similarity: 1 };
+        similarity = 1;
+        continue;
       }
 
       similarity = Math.max(similarity, getDiceBigramSimilarity(source, target));
     }
   }
 
-  return { exact: false, similarity };
+  return { exact: nameExact, similarity };
 }
 
 function getComparableNameVariants(
@@ -367,9 +383,16 @@ function extractLegalLotNumber(value: string | null | undefined) {
   return match?.[1] ?? null;
 }
 
-function extractRoadBuildingNumber(value: string | null | undefined) {
-  const match = value?.match(/(?:^|\s)\S*(?:로|길)\s+(\d+(?:-\d+)?)(?:\s|$)/);
-  return normalizeMolitAddressNumber(match?.[1]);
+function extractRoadAddressPair(
+  value: string | null | undefined,
+): MolitRoadAddressPair | null {
+  const match = value?.match(
+    /(?:^|\s)(\S*(?:로|길))\s+(\d+(?:-\d+)?)(?:\s|$)/,
+  );
+  const roadName = normalizeApartmentNameForMolit(match?.[1]);
+  const buildingNumber = normalizeMolitAddressNumber(match?.[2]);
+
+  return roadName && buildingNumber ? { roadName, buildingNumber } : null;
 }
 
 function addAddressEvidence(addresses: Map<string, number>, address: string) {

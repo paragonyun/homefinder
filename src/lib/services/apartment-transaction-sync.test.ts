@@ -9,6 +9,7 @@ import {
   collectMolitTransactionSyncResult,
   getMolitAddressHints,
   getMatchedDealYmds,
+  MOLIT_MONTH_FETCH_CONCURRENCY,
   resolveMolitTransactionSyncWindow,
   toMolitTransactionPayload,
 } from "./apartment-transaction-sync";
@@ -35,7 +36,10 @@ const baseTrade: MolitApartmentTrade = {
 
 const sangdoAddressHints = {
   lotNumbers: ["414"],
-  roadBuildingNumbers: [] as string[],
+  roadAddressPairs: [] as Array<{
+    roadName: string;
+    buildingNumber: string;
+  }>,
   legalDongNames: ["상도동"],
 };
 
@@ -82,7 +86,9 @@ describe("getMolitAddressHints", () => {
       }),
     ).toEqual({
       lotNumbers: ["15-1"],
-      roadBuildingNumbers: ["24"],
+      roadAddressPairs: [
+        { roadName: "동소문로34길", buildingNumber: "24" },
+      ],
       legalDongNames: ["돈암동"],
     });
   });
@@ -99,7 +105,9 @@ describe("getMolitAddressHints", () => {
       }),
     ).toEqual({
       lotNumbers: ["15-1"],
-      roadBuildingNumbers: ["24"],
+      roadAddressPairs: [
+        { roadName: "동소문로34길", buildingNumber: "24" },
+      ],
       legalDongNames: ["돈암동"],
     });
   });
@@ -113,7 +121,7 @@ describe("getMolitAddressHints", () => {
       }),
     ).toEqual({
       lotNumbers: ["15-1"],
-      roadBuildingNumbers: [],
+      roadAddressPairs: [],
       legalDongNames: ["현리"],
     });
   });
@@ -289,7 +297,9 @@ describe("collectMolitTransactionSyncResult", () => {
       sourceNames: ["돈암삼성"],
       addressHints: {
         lotNumbers: ["15-1"],
-        roadBuildingNumbers: ["24"],
+        roadAddressPairs: [
+          { roadName: "동소문로34길", buildingNumber: "24" },
+        ],
         legalDongNames: ["돈암동"],
       },
       primaryMonthCount: 12,
@@ -304,6 +314,56 @@ describe("collectMolitTransactionSyncResult", () => {
     expect(fetchPages).toHaveBeenCalledTimes(36);
     expect(result.transactions).toHaveLength(1);
     expect(result.matchedSourceNames).toEqual(["돈암동삼성"]);
+  });
+
+  it("fetches month chunks concurrently within a fixed bound and preserves attempt order", async () => {
+    const dealYmds = makeRecentDealYmds(
+      MOLIT_MONTH_FETCH_CONCURRENCY * 2,
+    );
+    const completionOrder: string[] = [];
+    let activeFetches = 0;
+    let maxActiveFetches = 0;
+    const fetchPages = vi.fn(async ({ dealYmd }: { dealYmd: string }) => {
+      const index = dealYmds.indexOf(dealYmd);
+      activeFetches += 1;
+      maxActiveFetches = Math.max(maxActiveFetches, activeFetches);
+
+      await new Promise((resolve) => {
+        setTimeout(
+          resolve,
+          (MOLIT_MONTH_FETCH_CONCURRENCY -
+            (index % MOLIT_MONTH_FETCH_CONCURRENCY)) *
+            2,
+        );
+      });
+
+      completionOrder.push(dealYmd);
+      activeFetches -= 1;
+      return [makePage(dealYmd, [])];
+    });
+
+    const result = await collectMolitTransactionSyncResult({
+      serviceKey: "service-key",
+      molitLawdCd: "11590",
+      legalDongCd: "10200",
+      sourceNames: ["alphaheights"],
+      addressHints: sangdoAddressHints,
+      primaryMonthCount: MOLIT_MONTH_FETCH_CONCURRENCY,
+      dealYmds: {
+        ok: true,
+        mode: "recent",
+        dealYmds,
+      },
+      fetchPages,
+    });
+
+    expect(fetchPages).toHaveBeenCalledTimes(dealYmds.length);
+    expect(maxActiveFetches).toBeGreaterThan(1);
+    expect(maxActiveFetches).toBeLessThanOrEqual(
+      MOLIT_MONTH_FETCH_CONCURRENCY,
+    );
+    expect(completionOrder).not.toEqual(dealYmds);
+    expect(result.attempts.map((attempt) => attempt.dealYmd)).toEqual(dealYmds);
   });
 
   it("keeps exact-address fuzzy names from different months as ambiguous candidates", async () => {
@@ -329,7 +389,9 @@ describe("collectMolitTransactionSyncResult", () => {
       sourceNames: ["돈암삼성"],
       addressHints: {
         lotNumbers: ["15-1"],
-        roadBuildingNumbers: ["24"],
+        roadAddressPairs: [
+          { roadName: "동소문로34길", buildingNumber: "24" },
+        ],
         legalDongNames: ["돈암동"],
       },
       dealYmds: {

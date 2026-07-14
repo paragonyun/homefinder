@@ -26,13 +26,18 @@ const baseTrade: MolitApartmentTrade = {
 
 const sangdoAddressHints = {
   lotNumbers: ["414"],
-  roadBuildingNumbers: [] as string[],
+  roadAddressPairs: [] as Array<{
+    roadName: string;
+    buildingNumber: string;
+  }>,
   legalDongNames: ["상도동"],
 };
 
 const donamAddressHints = {
   lotNumbers: ["15-1"],
-  roadBuildingNumbers: ["24"],
+  roadAddressPairs: [
+    { roadName: "동소문로34길", buildingNumber: "24" },
+  ],
   legalDongNames: ["돈암동"],
 };
 
@@ -80,7 +85,9 @@ describe("filterMatchingMolitTransactions", () => {
       legalDongCd: "10700",
       addressHints: {
         lotNumbers: [],
-        roadBuildingNumbers: ["24"],
+        roadAddressPairs: [
+          { roadName: "동소문로34길", buildingNumber: "24" },
+        ],
         legalDongNames: ["돈암동"],
       },
     });
@@ -220,12 +227,98 @@ describe("filterMatchingMolitTransactions", () => {
       legalDongCd: "10700",
       addressHints: {
         lotNumbers: [],
-        roadBuildingNumbers: ["24"],
+        roadAddressPairs: [
+          { roadName: "동소문로34길", buildingNumber: "24" },
+        ],
         legalDongNames: ["돈암동"],
       },
     });
 
     expect(matching).toEqual([transaction]);
+  });
+
+  it("requires both the normalized road name and building number for road evidence", () => {
+    const addressHints = {
+      lotNumbers: [] as string[],
+      roadAddressPairs: [
+        { roadName: "동소문로34길", buildingNumber: "24" },
+      ],
+      legalDongNames: ["돈암동"],
+    };
+    const differentRoad: MolitApartmentTrade = {
+      ...baseTrade,
+      apartmentNameFromSource: "돈암삼성1차",
+      addressFromSource: "돈암동 999",
+      lotNumberFromSource: "999",
+      roadAddressFromSource: "아리랑로 24",
+      umdCd: "10700",
+    };
+    const sameRoad: MolitApartmentTrade = {
+      ...differentRoad,
+      roadAddressFromSource: "동소문로34길 24",
+    };
+
+    expect(
+      filterMatchingMolitTransactions({
+        transactions: [differentRoad],
+        sourceNames: ["돈암삼성"],
+        legalDongCd: "10700",
+        addressHints,
+      }),
+    ).toEqual([]);
+    expect(
+      filterMatchingMolitTransactions({
+        transactions: [sameRoad],
+        sourceNames: ["돈암삼성"],
+        legalDongCd: "10700",
+        addressHints,
+      }),
+    ).toEqual([sameRoad]);
+  });
+
+  it("treats locality-stripped name equality as fuzzy address-dependent evidence", () => {
+    const differentAddress: MolitApartmentTrade = {
+      ...baseTrade,
+      apartmentNameFromSource: "돈암동삼성",
+      addressFromSource: "돈암동 524",
+      lotNumberFromSource: "524",
+      umdCd: "10700",
+    };
+    const exactAddress: MolitApartmentTrade = {
+      ...differentAddress,
+      addressFromSource: "돈암동 15-1",
+      lotNumberFromSource: "15-1",
+    };
+
+    expect(
+      filterMatchingMolitTransactions({
+        transactions: [differentAddress],
+        sourceNames: ["삼성"],
+        legalDongCd: "10700",
+        addressHints: donamAddressHints,
+      }),
+    ).toEqual([]);
+    expect(
+      filterMatchingMolitTransactions({
+        transactions: [exactAddress],
+        sourceNames: ["삼성"],
+        legalDongCd: "10700",
+        addressHints: donamAddressHints,
+      }),
+    ).toEqual([exactAddress]);
+
+    expect(
+      buildMolitTransactionCandidates({
+        transactions: [exactAddress],
+        sourceNames: ["삼성"],
+        legalDongCd: "10700",
+        addressHints: donamAddressHints,
+      })[0],
+    ).toMatchObject({
+      score: 150,
+      nameSimilarity: 1,
+      matchReasons: ["lot_exact", "name_similar"],
+    });
   });
 });
 
@@ -263,9 +356,9 @@ describe("buildMolitTransactionCandidates", () => {
           { address: "상도동 414", count: 2 },
           { address: "상도동 111", count: 1 },
         ],
-        score: 180,
+        score: 150,
         nameSimilarity: 1,
-        matchReasons: ["lot_exact", "name_exact"],
+        matchReasons: ["lot_exact", "name_similar"],
       },
     ]);
   });
@@ -414,7 +507,9 @@ describe("buildMolitTransactionCandidates", () => {
       legalDongCd: "10700",
       addressHints: {
         lotNumbers: [],
-        roadBuildingNumbers: ["24"],
+        roadAddressPairs: [
+          { roadName: "동소문로34길", buildingNumber: "24" },
+        ],
         legalDongNames: ["돈암동"],
       },
     });

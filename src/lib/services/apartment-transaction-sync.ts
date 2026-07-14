@@ -13,10 +13,13 @@ import {
   filterMatchingMolitTransactions,
   normalizeMolitAddressNumber,
   type MolitAddressHints,
+  type MolitRoadAddressPair,
   type MolitTransactionCandidate,
 } from "./molit-transaction-matching";
 
 export const MOLIT_TRANSACTION_SOURCE_NAME = "molit-apt-trade-detail";
+// Bound provider fan-out while keeping 36-month syncs within the route budget.
+export const MOLIT_MONTH_FETCH_CONCURRENCY = 4;
 
 type ResolvedMolitDealYmds = Extract<ResolveMolitDealYmdsResult, { ok: true }>;
 type FetchMolitTransactionPages = typeof fetchMolitApartmentTradePages;
@@ -84,7 +87,7 @@ export function getMolitAddressHints({
   fallbackAddresses: Array<string | null | undefined>;
 }): MolitAddressHints {
   const lotNumbers = new Set<string>();
-  const roadBuildingNumbers = new Set<string>();
+  const roadAddressPairs = new Map<string, MolitRoadAddressPair>();
   const legalDongNames = new Set<string>();
 
   for (const address of legalAddresses) {
@@ -92,12 +95,12 @@ export function getMolitAddressHints({
   }
 
   for (const address of roadAddresses) {
-    addRoadAddressHint(address, roadBuildingNumbers);
+    addRoadAddressHint(address, roadAddressPairs);
   }
 
   for (const address of fallbackAddresses) {
     if (isRoadAddress(address)) {
-      addRoadAddressHint(address, roadBuildingNumbers);
+      addRoadAddressHint(address, roadAddressPairs);
     } else {
       addLegalAddressHints(address, lotNumbers, legalDongNames);
     }
@@ -105,7 +108,7 @@ export function getMolitAddressHints({
 
   return {
     lotNumbers: Array.from(lotNumbers),
-    roadBuildingNumbers: Array.from(roadBuildingNumbers),
+    roadAddressPairs: Array.from(roadAddressPairs.values()),
     legalDongNames: Array.from(legalDongNames),
   };
 }
@@ -162,16 +165,14 @@ export async function collectMolitTransactionSyncResult({
         )
       : requestedDealYmds.length;
   const fetchedBatches: FetchedMolitTransactionBatch[] = [];
-
-  for (const dealYmd of requestedDealYmds.slice(0, resolvedPrimaryMonthCount)) {
-    const pages = await fetchPages({
+  fetchedBatches.push(
+    ...(await fetchMolitTransactionBatches({
+      dealYmds: requestedDealYmds.slice(0, resolvedPrimaryMonthCount),
+      fetchPages,
+      molitLawdCd,
       serviceKey,
-      lawdCd: molitLawdCd,
-      dealYmd,
-    });
-    const pageTransactions = pages.flatMap((page) => page.transactions);
-    fetchedBatches.push({ dealYmd, pages, transactions: pageTransactions });
-  }
+    })),
+  );
 
   let result = buildMolitTransactionSyncResult({
     addressHints,
@@ -186,15 +187,14 @@ export async function collectMolitTransactionSyncResult({
     result.transactions.length === 0 &&
     resolvedPrimaryMonthCount < requestedDealYmds.length
   ) {
-    for (const dealYmd of requestedDealYmds.slice(resolvedPrimaryMonthCount)) {
-      const pages = await fetchPages({
+    fetchedBatches.push(
+      ...(await fetchMolitTransactionBatches({
+        dealYmds: requestedDealYmds.slice(resolvedPrimaryMonthCount),
+        fetchPages,
+        molitLawdCd,
         serviceKey,
-        lawdCd: molitLawdCd,
-        dealYmd,
-      });
-      const pageTransactions = pages.flatMap((page) => page.transactions);
-      fetchedBatches.push({ dealYmd, pages, transactions: pageTransactions });
-    }
+      })),
+    );
 
     result = buildMolitTransactionSyncResult({
       addressHints,
@@ -206,6 +206,47 @@ export async function collectMolitTransactionSyncResult({
   }
 
   return result;
+}
+
+async function fetchMolitTransactionBatches({
+  dealYmds,
+  fetchPages,
+  molitLawdCd,
+  serviceKey,
+}: {
+  dealYmds: string[];
+  fetchPages: FetchMolitTransactionPages;
+  molitLawdCd: string;
+  serviceKey: string;
+}) {
+  const batches: FetchedMolitTransactionBatch[] = [];
+
+  for (
+    let index = 0;
+    index < dealYmds.length;
+    index += MOLIT_MONTH_FETCH_CONCURRENCY
+  ) {
+    const chunk = dealYmds.slice(index, index + MOLIT_MONTH_FETCH_CONCURRENCY);
+    const fetchedChunk = await Promise.all(
+      chunk.map(async (dealYmd): Promise<FetchedMolitTransactionBatch> => {
+        const pages = await fetchPages({
+          serviceKey,
+          lawdCd: molitLawdCd,
+          dealYmd,
+        });
+
+        return {
+          dealYmd,
+          pages,
+          transactions: pages.flatMap((page) => page.transactions),
+        };
+      }),
+    );
+
+    batches.push(...fetchedChunk);
+  }
+
+  return batches;
 }
 
 function buildMolitTransactionSyncResult({
@@ -329,7 +370,7 @@ function addLegalAddressHints(
 
 function addRoadAddressHint(
   value: string | null | undefined,
-  roadBuildingNumbers: Set<string>,
+  roadAddressPairs: Map<string, MolitRoadAddressPair>,
 ) {
   const tokens = getAddressTokens(value);
   const roadIndex = tokens.findIndex(isRoadNameToken);
@@ -338,10 +379,14 @@ function addRoadAddressHint(
     return;
   }
 
+  const roadName = normalizeApartmentNameForMolit(tokens[roadIndex]);
   const buildingNumber = normalizeMolitAddressNumber(tokens[roadIndex + 1]);
 
-  if (buildingNumber) {
-    roadBuildingNumbers.add(buildingNumber);
+  if (roadName && buildingNumber) {
+    roadAddressPairs.set(`${roadName}|${buildingNumber}`, {
+      roadName,
+      buildingNumber,
+    });
   }
 }
 

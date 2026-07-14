@@ -7,10 +7,10 @@ import {
   buildMolitTransactionSourceNames,
   collapseMolitTransactions,
   collectMolitTransactionSyncResult,
-  getAddressNumberTokens,
   getMatchedDealYmds,
   toMolitTransactionPayload,
 } from "./apartment-transaction-sync";
+import * as apartmentTransactionSync from "./apartment-transaction-sync";
 
 const baseTrade: MolitApartmentTrade = {
   dealYear: 2026,
@@ -23,11 +23,19 @@ const baseTrade: MolitApartmentTrade = {
   dealAmountKrw: 1_200_000_000,
   apartmentNameFromSource: "Alpha Heights",
   addressFromSource: "Sangdo-dong 414",
+  lotNumberFromSource: "414",
+  roadAddressFromSource: null,
   cancelYn: null,
   cancelDate: null,
   aptSeq: "apt-1",
   aptDong: "101",
   umdCd: "10200",
+};
+
+const sangdoAddressHints = {
+  lotNumbers: ["414"],
+  roadBuildingNumbers: [] as string[],
+  legalDongNames: ["상도동"],
 };
 
 function makePage(
@@ -55,11 +63,101 @@ describe("buildMolitTransactionSourceNames", () => {
   });
 });
 
-describe("getAddressNumberTokens", () => {
-  it("extracts unique lot number tokens from address hints", () => {
+describe("getMolitAddressHints", () => {
+  it("separates legal lots, road building numbers, and legal dong names", () => {
+    const getMolitAddressHints = Reflect.get(
+      apartmentTransactionSync,
+      "getMolitAddressHints",
+    ) as
+      | ((input: {
+          legalAddresses: string[];
+          roadAddresses: string[];
+          fallbackAddresses: string[];
+        }) => unknown)
+      | undefined;
+
+    expect(getMolitAddressHints).toBeTypeOf("function");
+
+    if (!getMolitAddressHints) {
+      return;
+    }
+
     expect(
-      getAddressNumberTokens(["Seoul Sangdo-dong 414", "Sangdo-ro 1-20", null]),
-    ).toEqual(["414", "1-20"]);
+      getMolitAddressHints({
+        legalAddresses: ["서울특별시 성북구 돈암동 15-1 돈암삼성"],
+        roadAddresses: ["서울특별시 성북구 동소문로34길 24"],
+        fallbackAddresses: [],
+      }),
+    ).toEqual({
+      lotNumbers: ["15-1"],
+      roadBuildingNumbers: ["24"],
+      legalDongNames: ["돈암동"],
+    });
+  });
+
+  it("classifies fallback addresses and normalizes leading zeroes per number segment", () => {
+    const getMolitAddressHints = Reflect.get(
+      apartmentTransactionSync,
+      "getMolitAddressHints",
+    ) as
+      | ((input: {
+          legalAddresses: string[];
+          roadAddresses: string[];
+          fallbackAddresses: string[];
+        }) => unknown)
+      | undefined;
+
+    expect(getMolitAddressHints).toBeTypeOf("function");
+
+    if (!getMolitAddressHints) {
+      return;
+    }
+
+    expect(
+      getMolitAddressHints({
+        legalAddresses: [],
+        roadAddresses: [],
+        fallbackAddresses: [
+          "서울특별시 성북구 돈암동 0015-01 돈암삼성",
+          "서울특별시 성북구 동소문로34길 0024",
+        ],
+      }),
+    ).toEqual({
+      lotNumbers: ["15-1"],
+      roadBuildingNumbers: ["24"],
+      legalDongNames: ["돈암동"],
+    });
+  });
+
+  it("uses the final rural locality immediately before the legal lot number", () => {
+    const getMolitAddressHints = Reflect.get(
+      apartmentTransactionSync,
+      "getMolitAddressHints",
+    ) as
+      | ((input: {
+          legalAddresses: string[];
+          roadAddresses: string[];
+          fallbackAddresses: string[];
+        }) => unknown)
+      | undefined;
+
+    expect(getMolitAddressHints).toBeTypeOf("function");
+
+    if (!getMolitAddressHints) {
+      return;
+    }
+
+    expect(
+      getMolitAddressHints({
+        legalAddresses: ["경기도 가평군 조종면 현리 산 0015-01"],
+        roadAddresses: [],
+        fallbackAddresses: [],
+      }),
+    ).toEqual({
+      lotNumbers: ["15-1"],
+      roadBuildingNumbers: [],
+      legalDongNames: ["현리"],
+    });
   });
 });
 
@@ -96,9 +194,13 @@ describe("collectMolitTransactionSyncResult", () => {
     expect(result.candidateNames).toEqual([
       {
         name: "Candidate Tower",
+        aptSeq: "apt-1",
         count: 1,
         latestDealDate: "2026-05-01",
         addresses: [{ address: "Sangdo-dong 414", count: 1 }],
+        score: 100,
+        nameSimilarity: 0,
+        matchReasons: ["lot_exact"],
       },
     ]);
   });
@@ -119,7 +221,7 @@ describe("collectMolitTransactionSyncResult", () => {
       molitLawdCd: "11590",
       legalDongCd: "10200",
       sourceNames: ["alphaheights"],
-      addressTokens: ["414"],
+      addressHints: sangdoAddressHints,
       dealYmds: {
         ok: true,
         mode: "recent",
@@ -132,6 +234,81 @@ describe("collectMolitTransactionSyncResult", () => {
     expect(result.transactions).toHaveLength(2);
     expect(result.selectedDealYmd).toBe("202605");
     expect(result.matchedDealYmds).toEqual(["202605", "202604"]);
+  });
+
+  it("keeps exact-address fuzzy names from different months as ambiguous candidates", async () => {
+    const fetchPages = vi.fn(async ({ dealYmd }: { dealYmd: string }) => [
+      makePage(dealYmd, [
+        {
+          ...baseTrade,
+          dealMonth: Number(dealYmd.slice(4, 6)),
+          dealDate: `${dealYmd.slice(0, 4)}-${dealYmd.slice(4, 6)}-01`,
+          apartmentNameFromSource:
+            dealYmd === "202605" ? "돈암동삼성" : "돈암삼성빌라",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          umdCd: "10700",
+        },
+      ]),
+    ]);
+
+    const result = await collectMolitTransactionSyncResult({
+      serviceKey: "service-key",
+      molitLawdCd: "11290",
+      legalDongCd: "10700",
+      sourceNames: ["돈암삼성"],
+      addressHints: {
+        lotNumbers: ["15-1"],
+        roadBuildingNumbers: ["24"],
+        legalDongNames: ["돈암동"],
+      },
+      dealYmds: {
+        ok: true,
+        mode: "recent",
+        dealYmds: ["202605", "202604"],
+      },
+      fetchPages,
+    });
+
+    expect(result.transactions).toEqual([]);
+    expect(result.candidateNames.map((candidate) => candidate.name)).toEqual([
+      "돈암삼성빌라",
+      "돈암동삼성",
+    ]);
+  });
+
+  it("does not auto-match fuzzy names through the untyped legacy token shim", async () => {
+    const fetchPages = vi.fn(async ({ dealYmd }: { dealYmd: string }) => [
+      makePage(dealYmd, [
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암동삼성",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          umdCd: "10700",
+        },
+      ]),
+    ]);
+
+    const result = await collectMolitTransactionSyncResult({
+      serviceKey: "service-key",
+      molitLawdCd: "11290",
+      legalDongCd: "10700",
+      sourceNames: ["돈암삼성"],
+      addressTokens: ["15-1", "24"],
+      dealYmds: {
+        ok: true,
+        mode: "manual",
+        dealYmds: ["202605"],
+      },
+      fetchPages,
+    });
+
+    expect(result.transactions).toEqual([]);
+    expect(result.candidateNames[0]).toMatchObject({
+      name: "돈암동삼성",
+      matchReasons: ["lot_exact", "name_similar"],
+    });
   });
 });
 

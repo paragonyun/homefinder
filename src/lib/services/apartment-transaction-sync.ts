@@ -10,6 +10,8 @@ import {
 import {
   buildMolitTransactionCandidates,
   filterMatchingMolitTransactions,
+  normalizeMolitAddressNumber,
+  type MolitAddressHints,
   type MolitTransactionCandidate,
 } from "./molit-transaction-matching";
 
@@ -75,7 +77,44 @@ export function getAddressNumberTokens(values: Array<string | null | undefined>)
   );
 }
 
+export function getMolitAddressHints({
+  fallbackAddresses,
+  legalAddresses,
+  roadAddresses,
+}: {
+  legalAddresses: Array<string | null | undefined>;
+  roadAddresses: Array<string | null | undefined>;
+  fallbackAddresses: Array<string | null | undefined>;
+}): MolitAddressHints {
+  const lotNumbers = new Set<string>();
+  const roadBuildingNumbers = new Set<string>();
+  const legalDongNames = new Set<string>();
+
+  for (const address of legalAddresses) {
+    addLegalAddressHints(address, lotNumbers, legalDongNames);
+  }
+
+  for (const address of roadAddresses) {
+    addRoadAddressHint(address, roadBuildingNumbers);
+  }
+
+  for (const address of fallbackAddresses) {
+    if (isRoadAddress(address)) {
+      addRoadAddressHint(address, roadBuildingNumbers);
+    } else {
+      addLegalAddressHints(address, lotNumbers, legalDongNames);
+    }
+  }
+
+  return {
+    lotNumbers: Array.from(lotNumbers),
+    roadBuildingNumbers: Array.from(roadBuildingNumbers),
+    legalDongNames: Array.from(legalDongNames),
+  };
+}
+
 export async function collectMolitTransactionSyncResult({
+  addressHints,
   addressTokens,
   dealYmds,
   fetchPages = fetchMolitApartmentTradePages,
@@ -88,15 +127,21 @@ export async function collectMolitTransactionSyncResult({
   molitLawdCd: string;
   legalDongCd: string | null;
   sourceNames: string[];
-  addressTokens: string[];
+  addressHints?: MolitAddressHints;
+  addressTokens?: string[];
   dealYmds: ResolvedMolitDealYmds;
   fetchPages?: FetchMolitTransactionPages;
 }): Promise<MolitTransactionSyncResult> {
+  const resolvedAddressHints =
+    addressHints ?? getLegacyMolitAddressHints(addressTokens ?? []);
+  const allowFuzzyNameMatch = addressHints !== undefined;
   const attempts: MolitTransactionSyncAttempt[] = [];
   const matchedPageRecords: MolitMatchedPageRecord[] = [];
-  const candidateTransactions: MolitApartmentTrade[] = [];
-  let selectedDealYmd: string | null = null;
-  const transactions: MolitApartmentTrade[] = [];
+  const fetchedBatches: Array<{
+    dealYmd: string;
+    pages: MolitApartmentTradePage[];
+    transactions: MolitApartmentTrade[];
+  }> = [];
 
   for (const dealYmd of dealYmds.dealYmds) {
     const pages = await fetchPages({
@@ -105,37 +150,63 @@ export async function collectMolitTransactionSyncResult({
       dealYmd,
     });
     const pageTransactions = pages.flatMap((page) => page.transactions);
-    const matchedTransactions = filterMatchingMolitTransactions({
-      transactions: pageTransactions,
+    fetchedBatches.push({ dealYmd, pages, transactions: pageTransactions });
+
+    if (dealYmds.mode === "manual") {
+      break;
+    }
+  }
+
+  const allFetchedTransactions = fetchedBatches.flatMap(
+    (batch) => batch.transactions,
+  );
+  const matchedTransactionSet = new Set(
+    filterMatchingMolitTransactions({
+      transactions: allFetchedTransactions,
       sourceNames,
       legalDongCd,
-      addressTokens,
-    });
+      addressHints: resolvedAddressHints,
+      allowFuzzyNameMatch,
+    }),
+  );
+  const candidateTransactions: MolitApartmentTrade[] = [];
+  let selectedDealYmd: string | null = null;
+  const transactions: MolitApartmentTrade[] = [];
 
-    if (matchedTransactions.length === 0) {
-      candidateTransactions.push(...pageTransactions);
-    }
+  for (const batch of fetchedBatches) {
+    const matchedTransactions = batch.transactions.filter((transaction) =>
+      matchedTransactionSet.has(transaction),
+    );
 
     attempts.push({
-      dealYmd,
-      totalCount: pages[0]?.totalCount ?? 0,
+      dealYmd: batch.dealYmd,
+      totalCount: batch.pages[0]?.totalCount ?? 0,
       matchedCount: matchedTransactions.length,
-      pageCount: pages.length,
+      pageCount: batch.pages.length,
     });
 
     if (matchedTransactions.length > 0) {
-      selectedDealYmd ??= dealYmd;
-      matchedPageRecords.push(...pages.map((page) => ({ dealYmd, page })));
+      selectedDealYmd ??= batch.dealYmd;
+      matchedPageRecords.push(
+        ...batch.pages.map((page) => ({ dealYmd: batch.dealYmd, page })),
+      );
       transactions.push(...matchedTransactions);
+    } else {
+      candidateTransactions.push(...batch.transactions);
     }
+  }
 
-    if (dealYmds.mode === "manual") {
-      if (!selectedDealYmd) {
-        selectedDealYmd = dealYmd;
-        matchedPageRecords.push(...pages.map((page) => ({ dealYmd, page })));
-      }
+  if (dealYmds.mode === "manual" && !selectedDealYmd) {
+    const manualBatch = fetchedBatches[0];
 
-      break;
+    if (manualBatch) {
+      selectedDealYmd = manualBatch.dealYmd;
+      matchedPageRecords.push(
+        ...manualBatch.pages.map((page) => ({
+          dealYmd: manualBatch.dealYmd,
+          page,
+        })),
+      );
     }
   }
 
@@ -143,7 +214,7 @@ export async function collectMolitTransactionSyncResult({
     transactions: candidateTransactions,
     sourceNames,
     legalDongCd,
-    addressTokens,
+    addressHints: resolvedAddressHints,
   });
 
   return {
@@ -154,6 +225,96 @@ export async function collectMolitTransactionSyncResult({
     selectedDealYmd,
     totalCount: attempts.reduce((sum, attempt) => sum + attempt.totalCount, 0),
     transactions,
+  };
+}
+
+function addLegalAddressHints(
+  value: string | null | undefined,
+  lotNumbers: Set<string>,
+  legalDongNames: Set<string>,
+) {
+  const tokens = getAddressTokens(value);
+  const localityIndex = findFinalLegalLocalityIndex(tokens);
+
+  if (localityIndex < 0) {
+    return;
+  }
+
+  legalDongNames.add(tokens[localityIndex]);
+
+  const lotTokenIndex =
+    tokens[localityIndex + 1] === "산" ? localityIndex + 2 : localityIndex + 1;
+  const lotNumber = normalizeMolitAddressNumber(tokens[lotTokenIndex]);
+
+  if (lotNumber) {
+    lotNumbers.add(lotNumber);
+  }
+}
+
+function addRoadAddressHint(
+  value: string | null | undefined,
+  roadBuildingNumbers: Set<string>,
+) {
+  const tokens = getAddressTokens(value);
+  const roadIndex = tokens.findIndex(isRoadNameToken);
+
+  if (roadIndex < 0) {
+    return;
+  }
+
+  const buildingNumber = normalizeMolitAddressNumber(tokens[roadIndex + 1]);
+
+  if (buildingNumber) {
+    roadBuildingNumbers.add(buildingNumber);
+  }
+}
+
+function getAddressTokens(value: string | null | undefined) {
+  return (
+    value
+      ?.trim()
+      .split(/\s+/)
+      .map((token) => token.replace(/^[([{]+|[)\]},]+$/g, ""))
+      .filter(Boolean) ?? []
+  );
+}
+
+function isLegalLocalityToken(value: string) {
+  return /^[가-힣][가-힣0-9·]*(?:동|읍|면|리)$/.test(value);
+}
+
+function findFinalLegalLocalityIndex(tokens: string[]) {
+  for (let index = tokens.length - 1; index >= 0; index -= 1) {
+    if (!isLegalLocalityToken(tokens[index])) {
+      continue;
+    }
+
+    const lotTokenIndex =
+      tokens[index + 1] === "산" ? index + 2 : index + 1;
+
+    if (normalizeMolitAddressNumber(tokens[lotTokenIndex])) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function isRoadNameToken(value: string) {
+  return /[가-힣0-9·]+(?:로|길)$/.test(value);
+}
+
+function isRoadAddress(value: string | null | undefined) {
+  return getAddressTokens(value).some(isRoadNameToken);
+}
+
+function getLegacyMolitAddressHints(addressTokens: string[]): MolitAddressHints {
+  return {
+    lotNumbers: addressTokens
+      .map((token) => normalizeMolitAddressNumber(token))
+      .filter((token): token is string => token !== null),
+    roadBuildingNumbers: [],
+    legalDongNames: [],
   };
 }
 

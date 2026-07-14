@@ -16,9 +16,24 @@ const baseTrade: MolitApartmentTrade = {
   dealAmountKrw: 1_000_000_000,
   apartmentNameFromSource: "건영",
   addressFromSource: "상도동 414",
+  lotNumberFromSource: "414",
+  roadAddressFromSource: null,
   cancelYn: null,
   cancelDate: null,
+  aptSeq: "apt-1",
   umdCd: "10200",
+};
+
+const sangdoAddressHints = {
+  lotNumbers: ["414"],
+  roadBuildingNumbers: [] as string[],
+  legalDongNames: ["상도동"],
+};
+
+const donamAddressHints = {
+  lotNumbers: ["15-1"],
+  roadBuildingNumbers: ["24"],
+  legalDongNames: ["돈암동"],
 };
 
 describe("filterMatchingMolitTransactions", () => {
@@ -31,15 +46,127 @@ describe("filterMatchingMolitTransactions", () => {
           dealDay: 2,
           dealDate: "2026-05-02",
           addressFromSource: "상도동 111",
+          lotNumberFromSource: "111",
         },
       ],
       sourceNames: ["상도건영", "건영"],
       legalDongCd: "10200",
-      addressTokens: ["414"],
+      addressHints: sangdoAddressHints,
     });
 
     expect(matching).toHaveLength(1);
     expect(matching[0].addressFromSource).toBe("상도동 414");
+  });
+
+  it("does not treat a road building number as a substring of a legal lot number", () => {
+    const matching = filterMatchingMolitTransactions({
+      transactions: [
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "일신건영휴먼빌아파트",
+          addressFromSource: "돈암동 524",
+          lotNumberFromSource: "524",
+          umdCd: "10700",
+        },
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "구현대",
+          addressFromSource: "돈암동 624",
+          lotNumberFromSource: "624",
+          umdCd: "10700",
+        },
+      ],
+      sourceNames: ["돈암삼성아파트", "돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: {
+        lotNumbers: [],
+        roadBuildingNumbers: ["24"],
+        legalDongNames: ["돈암동"],
+      },
+    });
+
+    expect(matching).toEqual([]);
+  });
+
+  it("matches a fuzzy source name only with unique exact-address evidence", () => {
+    const matching = filterMatchingMolitTransactions({
+      transactions: [
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암동삼성",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          aptSeq: "donam-samsung",
+          umdCd: "10700",
+        },
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "일신건영휴먼빌아파트",
+          addressFromSource: "돈암동 524",
+          lotNumberFromSource: "524",
+          umdCd: "10700",
+        },
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "구현대",
+          addressFromSource: "돈암동 624",
+          lotNumberFromSource: "624",
+          umdCd: "10700",
+        },
+      ],
+      sourceNames: ["돈암삼성아파트", "돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: donamAddressHints,
+    });
+
+    expect(matching.map((transaction) => transaction.apartmentNameFromSource)).toEqual([
+      "돈암동삼성",
+    ]);
+  });
+
+  it("does not auto-match fuzzy names when an exact address has multiple source names", () => {
+    const matching = filterMatchingMolitTransactions({
+      transactions: [
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암동삼성",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          umdCd: "10700",
+        },
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암삼성빌라",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          umdCd: "10700",
+        },
+      ],
+      sourceNames: ["돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: donamAddressHints,
+    });
+
+    expect(matching).toEqual([]);
+  });
+
+  it("rejects otherwise matching transactions from a different supplied legal dong", () => {
+    const matching = filterMatchingMolitTransactions({
+      transactions: [
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암삼성",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          umdCd: "99999",
+        },
+      ],
+      sourceNames: ["돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: donamAddressHints,
+    });
+
+    expect(matching).toEqual([]);
   });
 });
 
@@ -59,20 +186,126 @@ describe("buildMolitTransactionCandidates", () => {
           dealDay: 4,
           dealDate: "2026-05-04",
           addressFromSource: "상도동 111",
+          lotNumberFromSource: "111",
         },
       ],
       sourceNames: ["상도건영", "건영아파트"],
       legalDongCd: "10200",
-      addressTokens: ["414"],
+      addressHints: sangdoAddressHints,
     });
 
     expect(candidates).toEqual([
       {
         name: "건영",
-        count: 2,
-        latestDealDate: "2026-05-03",
+        aptSeq: "apt-1",
+        count: 3,
+        latestDealDate: "2026-05-04",
         addresses: [{ address: "상도동 414", count: 2 }],
+        score: 180,
+        nameSimilarity: 1,
+        matchReasons: ["lot_exact", "name_exact"],
       },
     ]);
+  });
+
+  it("ranks exact-address fuzzy matches above higher-volume name-only candidates", () => {
+    const highVolumeNameOnly = Array.from({ length: 30 }, (_, index) => ({
+      ...baseTrade,
+      dealDay: (index % 28) + 1,
+      dealDate: `2026-05-${String((index % 28) + 1).padStart(2, "0")}`,
+      apartmentNameFromSource: "돈암삼성빌라",
+      addressFromSource: "돈암동 524",
+      lotNumberFromSource: "524",
+      aptSeq: "high-volume",
+      umdCd: "10700",
+    }));
+    const candidates = buildMolitTransactionCandidates({
+      transactions: [
+        ...highVolumeNameOnly,
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암동삼성",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          aptSeq: "donam-samsung",
+          umdCd: "10700",
+        },
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "구현대",
+          addressFromSource: "돈암동 624",
+          lotNumberFromSource: "624",
+          aptSeq: "old-hyundai",
+          umdCd: "10700",
+        },
+      ],
+      sourceNames: ["돈암삼성아파트", "돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: donamAddressHints,
+    });
+
+    expect(candidates[0]).toMatchObject({
+      name: "돈암동삼성",
+      aptSeq: "donam-samsung",
+      count: 1,
+      addresses: [{ address: "돈암동 15-1", count: 1 }],
+      matchReasons: ["lot_exact", "name_similar"],
+    });
+    expect(candidates[0].nameSimilarity).toBeGreaterThanOrEqual(0.45);
+    expect(candidates[0].score).toBeGreaterThan(candidates[1].score);
+    expect(candidates[1]).toMatchObject({
+      name: "돈암삼성빌라",
+      count: 30,
+    });
+  });
+
+  it("keeps ambiguous exact-address source names as manual candidates", () => {
+    const candidates = buildMolitTransactionCandidates({
+      transactions: [
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암동삼성",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          umdCd: "10700",
+        },
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암삼성빌라",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          umdCd: "10700",
+        },
+      ],
+      sourceNames: ["돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: donamAddressHints,
+    });
+
+    expect(candidates.map((candidate) => candidate.name)).toEqual([
+      "돈암삼성빌라",
+      "돈암동삼성",
+    ]);
+    expect(candidates.every((candidate) => candidate.matchReasons.includes("lot_exact"))).toBe(
+      true,
+    );
+  });
+
+  it("caps scored candidates at 20", () => {
+    const candidates = buildMolitTransactionCandidates({
+      transactions: Array.from({ length: 25 }, (_, index) => ({
+        ...baseTrade,
+        apartmentNameFromSource: `돈암삼성${index + 1}차`,
+        addressFromSource: "돈암동 15-1",
+        lotNumberFromSource: "15-1",
+        aptSeq: `candidate-${index + 1}`,
+        umdCd: "10700",
+      })),
+      sourceNames: ["돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: donamAddressHints,
+    });
+
+    expect(candidates).toHaveLength(20);
   });
 });

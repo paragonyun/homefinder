@@ -6,6 +6,7 @@ import {
 } from "@/lib/data-providers/molit-transactions";
 import {
   buildMolitTransactionSourceNames,
+  collapseMolitTransactions,
   collectMolitTransactionSyncResult,
   getAddressNumberTokens,
   hashText,
@@ -208,11 +209,16 @@ export async function POST(
     return NextResponse.json({ error: rawError.message }, { status: 500 });
   }
 
-  if (syncResult.transactions.length > 0) {
+  const transactionsToPersist = collapseMolitTransactions(
+    syncResult.transactions,
+    apartmentId,
+  );
+
+  if (transactionsToPersist.length > 0) {
     const { error: upsertError } = await supabase
       .from("apartment_transactions")
       .upsert(
-        syncResult.transactions.map((transaction) =>
+        transactionsToPersist.map((transaction) =>
           toMolitTransactionPayload(transaction, {
             apartmentId,
             rawApiResponseId: rawResponse.id,
@@ -249,7 +255,7 @@ export async function POST(
   }
 
   return NextResponse.json({
-    matchedCount: syncResult.transactions.length,
+    matchedCount: transactionsToPersist.length,
     totalCount: syncResult.totalCount,
     dealYmd: syncResult.selectedDealYmd,
     matchedDealYmds: syncResult.matchedDealYmds,

@@ -201,6 +201,24 @@ export function toMolitTransactionPayload(
   };
 }
 
+export function collapseMolitTransactions(
+  transactions: MolitApartmentTrade[],
+  apartmentId: string,
+) {
+  const bySourceHash = new Map<string, MolitApartmentTrade>();
+
+  for (const transaction of transactions) {
+    const sourceHash = getTransactionSourceHash(apartmentId, transaction);
+    const current = bySourceHash.get(sourceHash);
+
+    if (!current || (!current.cancelYn && transaction.cancelYn)) {
+      bySourceHash.set(sourceHash, transaction);
+    }
+  }
+
+  return Array.from(bySourceHash.values());
+}
+
 function getTransactionSourceHash(
   apartmentId: string,
   transaction: MolitApartmentTrade,

@@ -5,6 +5,7 @@ import type {
 } from "../data-providers/molit-transactions";
 import {
   buildMolitTransactionSourceNames,
+  collapseMolitTransactions,
   collectMolitTransactionSyncResult,
   getAddressNumberTokens,
   getMatchedDealYmds,
@@ -157,6 +158,20 @@ describe("toMolitTransactionPayload", () => {
       fetched_at: "2026-06-22T00:00:00.000Z",
     });
     expect(payload.source_hash).toHaveLength(64);
+  });
+});
+
+describe("collapseMolitTransactions", () => {
+  it("collapses an active and cancelled version of the same trade into the cancelled row", () => {
+    const cancelledTrade: MolitApartmentTrade = {
+      ...baseTrade,
+      cancelYn: "O",
+      cancelDate: "2026-06-01",
+    };
+
+    expect(
+      collapseMolitTransactions([baseTrade, cancelledTrade], "apt-id"),
+    ).toEqual([cancelledTrade]);
   });
 });
 

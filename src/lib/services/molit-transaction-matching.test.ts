@@ -168,6 +168,65 @@ describe("filterMatchingMolitTransactions", () => {
 
     expect(matching).toEqual([]);
   });
+
+  it("keeps a supplied transaction legal dong eligible when the target code is unavailable", () => {
+    const transaction: MolitApartmentTrade = {
+      ...baseTrade,
+      apartmentNameFromSource: "돈암삼성",
+      addressFromSource: "돈암동 15-1",
+      lotNumberFromSource: "15-1",
+      umdCd: "10700",
+    };
+    const matching = filterMatchingMolitTransactions({
+      transactions: [transaction],
+      sourceNames: ["돈암삼성"],
+      legalDongCd: null,
+      addressHints: donamAddressHints,
+    });
+
+    expect(matching).toEqual([transaction]);
+  });
+
+  it("keeps a transaction without a supplied legal dong eligible for a coded target", () => {
+    const transaction: MolitApartmentTrade = {
+      ...baseTrade,
+      apartmentNameFromSource: "돈암삼성",
+      addressFromSource: "돈암동 15-1",
+      lotNumberFromSource: "15-1",
+      umdCd: undefined,
+    };
+    const matching = filterMatchingMolitTransactions({
+      transactions: [transaction],
+      sourceNames: ["돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: donamAddressHints,
+    });
+
+    expect(matching).toEqual([transaction]);
+  });
+
+  it("uses an exact road address to support a unique fuzzy-name match", () => {
+    const transaction: MolitApartmentTrade = {
+      ...baseTrade,
+      apartmentNameFromSource: "돈암동삼성",
+      addressFromSource: "돈암동 999",
+      lotNumberFromSource: "999",
+      roadAddressFromSource: "동소문로34길 24",
+      umdCd: "10700",
+    };
+    const matching = filterMatchingMolitTransactions({
+      transactions: [transaction],
+      sourceNames: ["돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: {
+        lotNumbers: [],
+        roadBuildingNumbers: ["24"],
+        legalDongNames: ["돈암동"],
+      },
+    });
+
+    expect(matching).toEqual([transaction]);
+  });
 });
 
 describe("buildMolitTransactionCandidates", () => {
@@ -307,5 +366,69 @@ describe("buildMolitTransactionCandidates", () => {
     });
 
     expect(candidates).toHaveLength(20);
+  });
+
+  it("reports exact road evidence for a fuzzy-name candidate", () => {
+    const candidates = buildMolitTransactionCandidates({
+      transactions: [
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암동삼성",
+          addressFromSource: "돈암동 999",
+          lotNumberFromSource: "999",
+          roadAddressFromSource: "동소문로34길 24",
+          aptSeq: "donam-road",
+          umdCd: "10700",
+        },
+      ],
+      sourceNames: ["돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: {
+        lotNumbers: [],
+        roadBuildingNumbers: ["24"],
+        legalDongNames: ["돈암동"],
+      },
+    });
+
+    expect(candidates[0]).toMatchObject({
+      name: "돈암동삼성",
+      aptSeq: "donam-road",
+      addresses: [{ address: "동소문로34길 24", count: 1 }],
+      matchReasons: ["road_exact", "name_similar"],
+    });
+  });
+
+  it("keeps the highest-scored candidate when applying the 20-candidate cap", () => {
+    const lowScoreTransactions = Array.from({ length: 20 }, (_, index) => ({
+      ...baseTrade,
+      apartmentNameFromSource: `무관단지${index + 1}`,
+      addressFromSource: `돈암동 ${500 + index}`,
+      lotNumberFromSource: String(500 + index),
+      aptSeq: `unrelated-${index + 1}`,
+      umdCd: "10700",
+    }));
+    const candidates = buildMolitTransactionCandidates({
+      transactions: [
+        ...lowScoreTransactions,
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "돈암동삼성",
+          addressFromSource: "돈암동 15-1",
+          lotNumberFromSource: "15-1",
+          aptSeq: "highest-score",
+          umdCd: "10700",
+        },
+      ],
+      sourceNames: ["돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: donamAddressHints,
+    });
+
+    expect(candidates).toHaveLength(20);
+    expect(candidates[0]).toMatchObject({
+      name: "돈암동삼성",
+      aptSeq: "highest-score",
+      matchReasons: ["lot_exact", "name_similar"],
+    });
   });
 });

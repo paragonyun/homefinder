@@ -357,7 +357,9 @@ function matchesLegalDong(
   transaction: MolitApartmentTrade,
   legalDongCd: string | null,
 ) {
-  return !transaction.umdCd || transaction.umdCd === legalDongCd;
+  return (
+    !legalDongCd || !transaction.umdCd || transaction.umdCd === legalDongCd
+  );
 }
 
 function extractLegalLotNumber(value: string | null | undefined) {

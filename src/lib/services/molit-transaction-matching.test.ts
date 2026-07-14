@@ -259,12 +259,41 @@ describe("buildMolitTransactionCandidates", () => {
         aptSeq: "apt-1",
         count: 3,
         latestDealDate: "2026-05-04",
-        addresses: [{ address: "상도동 414", count: 2 }],
+        addresses: [
+          { address: "상도동 414", count: 2 },
+          { address: "상도동 111", count: 1 },
+        ],
         score: 180,
         nameSimilarity: 1,
         matchReasons: ["lot_exact", "name_exact"],
       },
     ]);
+  });
+
+  it("retains representative source addresses without exact address evidence", () => {
+    const candidates = buildMolitTransactionCandidates({
+      transactions: [
+        {
+          ...baseTrade,
+          apartmentNameFromSource: "한신",
+          addressFromSource: "돈암동 777",
+          lotNumberFromSource: "777",
+          roadAddressFromSource: "아리랑로5길 10",
+          aptSeq: "same-dong-candidate",
+          umdCd: "10700",
+        },
+      ],
+      sourceNames: ["돈암삼성"],
+      legalDongCd: "10700",
+      addressHints: donamAddressHints,
+    });
+
+    expect(candidates[0].addresses).toEqual(
+      expect.arrayContaining([
+        { address: "돈암동 777", count: 1 },
+        { address: "아리랑로5길 10", count: 1 },
+      ]),
+    );
   });
 
   it("ranks exact-address fuzzy matches above higher-volume name-only candidates", () => {
@@ -393,9 +422,14 @@ describe("buildMolitTransactionCandidates", () => {
     expect(candidates[0]).toMatchObject({
       name: "돈암동삼성",
       aptSeq: "donam-road",
-      addresses: [{ address: "동소문로34길 24", count: 1 }],
       matchReasons: ["road_exact", "name_similar"],
     });
+    expect(candidates[0].addresses).toEqual(
+      expect.arrayContaining([
+        { address: "돈암동 999", count: 1 },
+        { address: "동소문로34길 24", count: 1 },
+      ]),
+    );
   });
 
   it("keeps the highest-scored candidate when applying the 20-candidate cap", () => {

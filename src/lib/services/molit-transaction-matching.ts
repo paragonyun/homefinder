@@ -134,11 +134,11 @@ export function buildMolitTransactionCandidates({
       current.latestDealDate = transaction.dealDate;
     }
 
-    if (evidence.lotExact && transaction.addressFromSource) {
+    if (transaction.addressFromSource) {
       addAddressEvidence(current.addresses, transaction.addressFromSource);
     }
 
-    if (evidence.roadExact && transaction.roadAddressFromSource) {
+    if (transaction.roadAddressFromSource) {
       addAddressEvidence(current.addresses, transaction.roadAddressFromSource);
     }
 

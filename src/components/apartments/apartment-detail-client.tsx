@@ -46,6 +46,8 @@ import {
   summarizeMonthlyTrendWindow,
   type MonthlyPriceTrendLine,
 } from "@/lib/services/price-summary";
+import { formatMolitCandidateReasons } from "@/lib/services/molit-candidate-presentation";
+import type { MolitTransactionCandidate } from "@/lib/services/molit-transaction-matching";
 import {
   createSupabaseBrowserClient,
   isSupabaseConfigured,
@@ -73,13 +75,6 @@ type TransactionSyncResult = {
   matchedDealYmds?: string[];
   monthsChecked?: number;
   candidateNames?: MolitTransactionCandidate[];
-};
-
-type MolitTransactionCandidate = {
-  name: string;
-  count: number;
-  latestDealDate?: string;
-  addresses?: Array<{ address: string; count: number }>;
 };
 
 type BasicInfoSyncResult = {
@@ -433,14 +428,6 @@ export function ApartmentDetailClient({
       const accessToken = await getAccessToken();
       const messages: string[] = [];
 
-      try {
-        const transactionResult = await syncTransactions(accessToken);
-        setCandidateNames(transactionResult.candidateNames ?? []);
-        messages.push(`실거래가: ${formatTransactionSyncMessage(transactionResult)}`);
-      } catch (error) {
-        messages.push(`실거래가 실패: ${getErrorMessage(error)}`);
-      }
-
       let canSyncBasicInfo = Boolean(apartment.kapt_code);
 
       if (!canSyncBasicInfo) {
@@ -475,6 +462,14 @@ export function ApartmentDetailClient({
       }
 
       try {
+        const transactionResult = await syncTransactions(accessToken);
+        setCandidateNames(transactionResult.candidateNames ?? []);
+        messages.push(`실거래가: ${formatTransactionSyncMessage(transactionResult)}`);
+      } catch (error) {
+        messages.push(`실거래가 실패: ${getErrorMessage(error)}`);
+      }
+
+      try {
         const buildingInfoResult = await syncBuildingInfo(accessToken);
         messages.push(`건축정보: ${formatBuildingInfoSyncMessage(buildingInfoResult)}`);
       } catch (error) {
@@ -506,7 +501,24 @@ export function ApartmentDetailClient({
         return;
       }
 
-      const basicInfoResult = await syncBasicInfo(accessToken);
+      const messages = [
+        `K-apt 코드 ${resolveResult.selected.kaptCode}를 저장했습니다.`,
+      ];
+
+      try {
+        const basicInfoResult = await syncBasicInfo(accessToken);
+        messages.push(formatBasicInfoSyncMessage(basicInfoResult));
+      } catch (error) {
+        messages.push(`기본정보 실패: ${getErrorMessage(error)}`);
+      }
+
+      try {
+        const transactionResult = await syncTransactions(accessToken);
+        setCandidateNames(transactionResult.candidateNames ?? []);
+        messages.push(`실거래가: ${formatTransactionSyncMessage(transactionResult)}`);
+      } catch (error) {
+        messages.push(`실거래가 실패: ${getErrorMessage(error)}`);
+      }
 
       try {
         await syncBuildingInfo(accessToken);
@@ -516,11 +528,7 @@ export function ApartmentDetailClient({
 
       setKaptCodeCandidates([]);
       await loadApartment();
-      setMessage(
-        `K-apt 코드 ${resolveResult.selected.kaptCode}를 저장했습니다. ${formatBasicInfoSyncMessage(
-          basicInfoResult,
-        )}`,
-      );
+      setMessage(messages.join(" "));
     } catch (error) {
       setMessage(getErrorMessage(error));
     } finally {
@@ -1003,8 +1011,9 @@ export function ApartmentDetailClient({
               가격/실거래가
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              국토부 아파트 매매 실거래가 상세 자료를 최근 12개월까지 조회해
-              차트는 현재월까지 반영하고, 아래 거래 표는 최신 계약 10건만 표시합니다.
+              국토부 아파트 매매 실거래가 상세 자료를 최근 12개월부터 확인하고,
+              일치 거래가 없으면 36개월까지 조회합니다. 차트는 현재월까지
+              반영하고, 아래 거래 표는 최신 계약 10건만 표시합니다.
             </p>
             <p className="mt-1 text-sm text-slate-500">
               법정동코드: {apartment?.lawd_cd ?? "미입력"}
@@ -1747,6 +1756,19 @@ function SyncStatusPanel({
                   <p className="font-semibold text-slate-950">
                     {candidate.name} · {candidate.count.toLocaleString("ko-KR")}건
                   </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                      매칭 점수 {candidate.score}점
+                    </span>
+                    {formatMolitCandidateReasons(candidate).map((reason) => (
+                      <span
+                        key={reason}
+                        className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+                      >
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
                   <p className="mt-1 text-xs leading-5 text-slate-600">
                     {formatMolitCandidateAddressSummary(candidate)}
                   </p>

@@ -7,10 +7,11 @@ import {
   buildMolitTransactionSourceNames,
   collapseMolitTransactions,
   collectMolitTransactionSyncResult,
+  getMolitAddressHints,
   getMatchedDealYmds,
+  resolveMolitTransactionSyncWindow,
   toMolitTransactionPayload,
 } from "./apartment-transaction-sync";
-import * as apartmentTransactionSync from "./apartment-transaction-sync";
 
 const baseTrade: MolitApartmentTrade = {
   dealYear: 2026,
@@ -50,6 +51,14 @@ function makePage(
   };
 }
 
+function makeRecentDealYmds(months: number) {
+  return Array.from({ length: months }, (_, index) => {
+    const date = new Date(Date.UTC(2026, 4 - index, 1));
+
+    return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+  });
+}
+
 describe("buildMolitTransactionSourceNames", () => {
   it("normalizes and dedupes apartment names, aliases, and selected candidates", () => {
     expect(
@@ -65,23 +74,6 @@ describe("buildMolitTransactionSourceNames", () => {
 
 describe("getMolitAddressHints", () => {
   it("separates legal lots, road building numbers, and legal dong names", () => {
-    const getMolitAddressHints = Reflect.get(
-      apartmentTransactionSync,
-      "getMolitAddressHints",
-    ) as
-      | ((input: {
-          legalAddresses: string[];
-          roadAddresses: string[];
-          fallbackAddresses: string[];
-        }) => unknown)
-      | undefined;
-
-    expect(getMolitAddressHints).toBeTypeOf("function");
-
-    if (!getMolitAddressHints) {
-      return;
-    }
-
     expect(
       getMolitAddressHints({
         legalAddresses: ["서울특별시 성북구 돈암동 15-1 돈암삼성"],
@@ -96,23 +88,6 @@ describe("getMolitAddressHints", () => {
   });
 
   it("classifies fallback addresses and normalizes leading zeroes per number segment", () => {
-    const getMolitAddressHints = Reflect.get(
-      apartmentTransactionSync,
-      "getMolitAddressHints",
-    ) as
-      | ((input: {
-          legalAddresses: string[];
-          roadAddresses: string[];
-          fallbackAddresses: string[];
-        }) => unknown)
-      | undefined;
-
-    expect(getMolitAddressHints).toBeTypeOf("function");
-
-    if (!getMolitAddressHints) {
-      return;
-    }
-
     expect(
       getMolitAddressHints({
         legalAddresses: [],
@@ -130,23 +105,6 @@ describe("getMolitAddressHints", () => {
   });
 
   it("uses the final rural locality immediately before the legal lot number", () => {
-    const getMolitAddressHints = Reflect.get(
-      apartmentTransactionSync,
-      "getMolitAddressHints",
-    ) as
-      | ((input: {
-          legalAddresses: string[];
-          roadAddresses: string[];
-          fallbackAddresses: string[];
-        }) => unknown)
-      | undefined;
-
-    expect(getMolitAddressHints).toBeTypeOf("function");
-
-    if (!getMolitAddressHints) {
-      return;
-    }
-
     expect(
       getMolitAddressHints({
         legalAddresses: ["경기도 가평군 조종면 현리 산 0015-01"],
@@ -157,6 +115,35 @@ describe("getMolitAddressHints", () => {
       lotNumbers: ["15-1"],
       roadBuildingNumbers: [],
       legalDongNames: ["현리"],
+    });
+  });
+});
+
+describe("resolveMolitTransactionSyncWindow", () => {
+  it("uses a 36-month fallback window only for the default request", () => {
+    const defaultWindow = resolveMolitTransactionSyncWindow({
+      now: new Date("2026-05-19T00:00:00Z"),
+    });
+    const explicitWindow = resolveMolitTransactionSyncWindow({
+      months: 2,
+      now: new Date("2026-05-19T00:00:00Z"),
+    });
+
+    expect(defaultWindow.dealYmds.ok).toBe(true);
+
+    if (!defaultWindow.dealYmds.ok) {
+      return;
+    }
+
+    expect(defaultWindow.dealYmds.dealYmds).toHaveLength(36);
+    expect(defaultWindow.primaryMonthCount).toBe(12);
+    expect(explicitWindow).toMatchObject({
+      dealYmds: {
+        ok: true,
+        mode: "recent",
+        dealYmds: ["202605", "202604"],
+      },
+      primaryMonthCount: undefined,
     });
   });
 });
@@ -178,7 +165,7 @@ describe("collectMolitTransactionSyncResult", () => {
       molitLawdCd: "11590",
       legalDongCd: "10200",
       sourceNames: ["savedname"],
-      addressTokens: ["414"],
+      addressHints: sangdoAddressHints,
       dealYmds: {
         ok: true,
         mode: "manual",
@@ -236,6 +223,89 @@ describe("collectMolitTransactionSyncResult", () => {
     expect(result.matchedDealYmds).toEqual(["202605", "202604"]);
   });
 
+  it("evaluates the full primary window before stopping the fallback search", async () => {
+    const dealYmds = makeRecentDealYmds(36);
+    const fetchPages = vi.fn(async ({ dealYmd }: { dealYmd: string }) => [
+      makePage(dealYmd, [
+        {
+          ...baseTrade,
+          dealMonth: Number(dealYmd.slice(4, 6)),
+          dealDate: `${dealYmd.slice(0, 4)}-${dealYmd.slice(4, 6)}-01`,
+        },
+      ]),
+    ]);
+
+    const result = await collectMolitTransactionSyncResult({
+      serviceKey: "service-key",
+      molitLawdCd: "11590",
+      legalDongCd: "10200",
+      sourceNames: ["alphaheights"],
+      addressHints: sangdoAddressHints,
+      primaryMonthCount: 12,
+      dealYmds: {
+        ok: true,
+        mode: "recent",
+        dealYmds,
+      },
+      fetchPages,
+    });
+
+    expect(fetchPages).toHaveBeenCalledTimes(12);
+    expect(
+      fetchPages.mock.calls.map(([input]) => input.dealYmd),
+    ).toEqual(dealYmds.slice(0, 12));
+    expect(result.transactions).toHaveLength(12);
+    expect(result.matchedSourceNames).toEqual(["Alpha Heights"]);
+  });
+
+  it("evaluates fallback months together with the primary window when primary has no match", async () => {
+    const dealYmds = makeRecentDealYmds(36);
+    const fetchPages = vi.fn(async ({ dealYmd }: { dealYmd: string }) => {
+      const index = dealYmds.indexOf(dealYmd);
+      const transaction =
+        index === 12
+          ? {
+              ...baseTrade,
+              apartmentNameFromSource: "돈암동삼성",
+              addressFromSource: "돈암동 15-1",
+              lotNumberFromSource: "15-1",
+              umdCd: "10700",
+            }
+          : {
+              ...baseTrade,
+              apartmentNameFromSource: "무관단지",
+              addressFromSource: "돈암동 524",
+              lotNumberFromSource: "524",
+              umdCd: "10700",
+            };
+
+      return [makePage(dealYmd, [transaction])];
+    });
+
+    const result = await collectMolitTransactionSyncResult({
+      serviceKey: "service-key",
+      molitLawdCd: "11290",
+      legalDongCd: "10700",
+      sourceNames: ["돈암삼성"],
+      addressHints: {
+        lotNumbers: ["15-1"],
+        roadBuildingNumbers: ["24"],
+        legalDongNames: ["돈암동"],
+      },
+      primaryMonthCount: 12,
+      dealYmds: {
+        ok: true,
+        mode: "recent",
+        dealYmds,
+      },
+      fetchPages,
+    });
+
+    expect(fetchPages).toHaveBeenCalledTimes(36);
+    expect(result.transactions).toHaveLength(1);
+    expect(result.matchedSourceNames).toEqual(["돈암동삼성"]);
+  });
+
   it("keeps exact-address fuzzy names from different months as ambiguous candidates", async () => {
     const fetchPages = vi.fn(async ({ dealYmd }: { dealYmd: string }) => [
       makePage(dealYmd, [
@@ -277,39 +347,6 @@ describe("collectMolitTransactionSyncResult", () => {
     ]);
   });
 
-  it("does not auto-match fuzzy names through the untyped legacy token shim", async () => {
-    const fetchPages = vi.fn(async ({ dealYmd }: { dealYmd: string }) => [
-      makePage(dealYmd, [
-        {
-          ...baseTrade,
-          apartmentNameFromSource: "돈암동삼성",
-          addressFromSource: "돈암동 15-1",
-          lotNumberFromSource: "15-1",
-          umdCd: "10700",
-        },
-      ]),
-    ]);
-
-    const result = await collectMolitTransactionSyncResult({
-      serviceKey: "service-key",
-      molitLawdCd: "11290",
-      legalDongCd: "10700",
-      sourceNames: ["돈암삼성"],
-      addressTokens: ["15-1", "24"],
-      dealYmds: {
-        ok: true,
-        mode: "manual",
-        dealYmds: ["202605"],
-      },
-      fetchPages,
-    });
-
-    expect(result.transactions).toEqual([]);
-    expect(result.candidateNames[0]).toMatchObject({
-      name: "돈암동삼성",
-      matchReasons: ["lot_exact", "name_similar"],
-    });
-  });
 });
 
 describe("toMolitTransactionPayload", () => {

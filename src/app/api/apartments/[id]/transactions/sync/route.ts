@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { getRoleFromAppMetadata, isAdminRole } from "@/lib/auth/user-role";
-import {
-  MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT,
-  resolveMolitDealYmds,
-} from "@/lib/data-providers/molit-transactions";
+import { MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT } from "@/lib/data-providers/molit-transactions";
 import {
   buildMolitTransactionSourceNames,
   collapseMolitTransactions,
   collectMolitTransactionSyncResult,
-  getAddressNumberTokens,
+  getMolitAddressHints,
   hashText,
+  resolveMolitTransactionSyncWindow,
   toMolitTransactionPayload,
 } from "@/lib/services/apartment-transaction-sync";
 import {
@@ -68,7 +66,7 @@ export async function POST(
 
   const { id: apartmentId } = await context.params;
   const body = await readJsonBody(request);
-  const dealYmds = resolveMolitDealYmds({
+  const { dealYmds, primaryMonthCount } = resolveMolitTransactionSyncWindow({
     dealYmd: body.dealYmd,
     months: body.months,
   });
@@ -108,13 +106,23 @@ export async function POST(
   const molitLawdCd = apartment.lawd_cd.slice(0, 5);
   const legalDongCd =
     apartment.lawd_cd.length === 10 ? apartment.lawd_cd.slice(5) : null;
+  const { data: basicInfo, error: basicInfoError } = await supabase
+    .from("apartment_basic_info")
+    .select("legal_address_from_source,road_address_from_source")
+    .eq("apartment_id", apartmentId)
+    .maybeSingle();
+
+  if (basicInfoError && !isMissingTableError(basicInfoError)) {
+    return NextResponse.json({ error: basicInfoError.message }, { status: 500 });
+  }
+
   const { data: aliasRows, error: aliasError } = await supabase
     .from("apartment_aliases")
     .select("alias,source")
     .eq("apartment_id", apartmentId)
     .or("source.is.null,source.eq.molit");
 
-  if (aliasError && aliasError.code !== "42P01") {
+  if (aliasError && !isMissingTableError(aliasError)) {
     return NextResponse.json({ error: aliasError.message }, { status: 500 });
   }
 
@@ -131,10 +139,11 @@ export async function POST(
     ),
     selectedCandidateName,
   });
-  const addressTokens = getAddressNumberTokens([
-    apartment.address,
-    apartment.road_address,
-  ]);
+  const addressHints = getMolitAddressHints({
+    legalAddresses: [basicInfo?.legal_address_from_source],
+    roadAddresses: [basicInfo?.road_address_from_source],
+    fallbackAddresses: [apartment.address, apartment.road_address],
+  });
   let syncResult: Awaited<ReturnType<typeof collectMolitTransactionSyncResult>>;
 
   try {
@@ -143,8 +152,9 @@ export async function POST(
       molitLawdCd,
       legalDongCd,
       sourceNames: uniqueSourceNames,
-      addressTokens,
+      addressHints,
       dealYmds,
+      primaryMonthCount,
     });
   } catch (error) {
     return NextResponse.json(
@@ -171,7 +181,9 @@ export async function POST(
           legalDongCd,
           mode: dealYmds.mode,
           dealYmds: dealYmds.dealYmds,
+          primaryMonthCount,
           sourceNames: uniqueSourceNames,
+          addressHints,
           selectedCandidateName,
         }),
       ),
@@ -182,7 +194,9 @@ export async function POST(
         legalDongCd,
         mode: dealYmds.mode,
         dealYmds: dealYmds.dealYmds,
+        primaryMonthCount: primaryMonthCount ?? null,
         sourceNames: uniqueSourceNames,
+        addressHints,
         selectedCandidateName: selectedCandidateName || null,
         attempts: syncResult.attempts,
       },
@@ -191,6 +205,7 @@ export async function POST(
         matchedCount: syncResult.transactions.length,
         matchedDealYmd: syncResult.selectedDealYmd,
         matchedDealYmds: syncResult.matchedDealYmds,
+        matchedSourceNames: syncResult.matchedSourceNames,
         candidateNames: syncResult.candidateNames,
         attempts: syncResult.attempts,
         pages: syncResult.matchedPageRecords.map(({ dealYmd, page }) => ({
@@ -232,20 +247,20 @@ export async function POST(
       return NextResponse.json({ error: upsertError.message }, { status: 500 });
     }
 
-    if (selectedCandidateName) {
+    if (syncResult.matchedSourceNames.length > 0) {
       const { error: aliasUpsertError } = await supabase
         .from("apartment_aliases")
         .upsert(
-          {
+          syncResult.matchedSourceNames.map((alias) => ({
             user_id: user.id,
             apartment_id: apartmentId,
-            alias: selectedCandidateName,
+            alias,
             source: "molit",
-          },
+          })),
           { onConflict: "apartment_id,source,alias" },
         );
 
-      if (aliasUpsertError && aliasUpsertError.code !== "42P01") {
+      if (aliasUpsertError && !isMissingTableError(aliasUpsertError)) {
         return NextResponse.json(
           { error: aliasUpsertError.message },
           { status: 500 },
@@ -262,6 +277,7 @@ export async function POST(
     monthsChecked: syncResult.attempts.length,
     mode: dealYmds.mode,
     candidateNames: syncResult.candidateNames,
+    matchedSourceNames: syncResult.matchedSourceNames,
   });
 }
 
@@ -281,4 +297,8 @@ async function readJsonBody(request: Request) {
   } catch {
     return {};
   }
+}
+
+function isMissingTableError(error: { code?: string }) {
+  return error.code === "42P01" || error.code === "PGRST205";
 }

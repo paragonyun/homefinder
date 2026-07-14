@@ -3,6 +3,7 @@ import {
   fetchMolitApartmentTradePages,
   MOLIT_APARTMENT_TRADE_DETAIL_ENDPOINT,
   normalizeApartmentNameForMolit,
+  resolveMolitDealYmds,
   type MolitApartmentTrade,
   type MolitApartmentTradePage,
   type ResolveMolitDealYmdsResult,
@@ -19,6 +20,11 @@ export const MOLIT_TRANSACTION_SOURCE_NAME = "molit-apt-trade-detail";
 
 type ResolvedMolitDealYmds = Extract<ResolveMolitDealYmdsResult, { ok: true }>;
 type FetchMolitTransactionPages = typeof fetchMolitApartmentTradePages;
+type FetchedMolitTransactionBatch = {
+  dealYmd: string;
+  pages: MolitApartmentTradePage[];
+  transactions: MolitApartmentTrade[];
+};
 
 export type MolitTransactionSyncAttempt = {
   dealYmd: string;
@@ -37,6 +43,7 @@ export type MolitTransactionSyncResult = {
   candidateNames: MolitTransactionCandidate[];
   matchedDealYmds: string[];
   matchedPageRecords: MolitMatchedPageRecord[];
+  matchedSourceNames: string[];
   selectedDealYmd: string | null;
   totalCount: number;
   transactions: MolitApartmentTrade[];
@@ -63,16 +70,6 @@ export function buildMolitTransactionSourceNames({
       ]
         .map((value) => normalizeApartmentNameForMolit(value))
         .filter(Boolean),
-    ),
-  );
-}
-
-export function getAddressNumberTokens(values: Array<string | null | undefined>) {
-  return Array.from(
-    new Set(
-      values
-        .flatMap((value) => value?.match(/\d{1,4}(?:-\d{1,4})?/g) ?? [])
-        .filter((value) => value.length >= 2),
     ),
   );
 }
@@ -113,13 +110,34 @@ export function getMolitAddressHints({
   };
 }
 
+export function resolveMolitTransactionSyncWindow({
+  dealYmd,
+  months,
+  now,
+}: {
+  dealYmd?: unknown;
+  months?: unknown;
+  now?: Date;
+}) {
+  const hasExplicitScope = dealYmd !== undefined || months !== undefined;
+
+  return {
+    dealYmds: resolveMolitDealYmds({
+      dealYmd,
+      months: hasExplicitScope ? months : 36,
+      now,
+    }),
+    primaryMonthCount: hasExplicitScope ? undefined : 12,
+  };
+}
+
 export async function collectMolitTransactionSyncResult({
   addressHints,
-  addressTokens,
   dealYmds,
   fetchPages = fetchMolitApartmentTradePages,
   legalDongCd,
   molitLawdCd,
+  primaryMonthCount,
   serviceKey,
   sourceNames,
 }: {
@@ -127,23 +145,25 @@ export async function collectMolitTransactionSyncResult({
   molitLawdCd: string;
   legalDongCd: string | null;
   sourceNames: string[];
-  addressHints?: MolitAddressHints;
-  addressTokens?: string[];
+  addressHints: MolitAddressHints;
   dealYmds: ResolvedMolitDealYmds;
+  primaryMonthCount?: number;
   fetchPages?: FetchMolitTransactionPages;
 }): Promise<MolitTransactionSyncResult> {
-  const resolvedAddressHints =
-    addressHints ?? getLegacyMolitAddressHints(addressTokens ?? []);
-  const allowFuzzyNameMatch = addressHints !== undefined;
-  const attempts: MolitTransactionSyncAttempt[] = [];
-  const matchedPageRecords: MolitMatchedPageRecord[] = [];
-  const fetchedBatches: Array<{
-    dealYmd: string;
-    pages: MolitApartmentTradePage[];
-    transactions: MolitApartmentTrade[];
-  }> = [];
+  const requestedDealYmds =
+    dealYmds.mode === "manual"
+      ? dealYmds.dealYmds.slice(0, 1)
+      : dealYmds.dealYmds;
+  const resolvedPrimaryMonthCount =
+    dealYmds.mode === "recent" && primaryMonthCount !== undefined
+      ? Math.min(
+          requestedDealYmds.length,
+          Math.max(0, Math.trunc(primaryMonthCount)),
+        )
+      : requestedDealYmds.length;
+  const fetchedBatches: FetchedMolitTransactionBatch[] = [];
 
-  for (const dealYmd of dealYmds.dealYmds) {
+  for (const dealYmd of requestedDealYmds.slice(0, resolvedPrimaryMonthCount)) {
     const pages = await fetchPages({
       serviceKey,
       lawdCd: molitLawdCd,
@@ -151,12 +171,58 @@ export async function collectMolitTransactionSyncResult({
     });
     const pageTransactions = pages.flatMap((page) => page.transactions);
     fetchedBatches.push({ dealYmd, pages, transactions: pageTransactions });
-
-    if (dealYmds.mode === "manual") {
-      break;
-    }
   }
 
+  let result = buildMolitTransactionSyncResult({
+    addressHints,
+    fetchedBatches,
+    legalDongCd,
+    mode: dealYmds.mode,
+    sourceNames,
+  });
+
+  if (
+    dealYmds.mode === "recent" &&
+    result.transactions.length === 0 &&
+    resolvedPrimaryMonthCount < requestedDealYmds.length
+  ) {
+    for (const dealYmd of requestedDealYmds.slice(resolvedPrimaryMonthCount)) {
+      const pages = await fetchPages({
+        serviceKey,
+        lawdCd: molitLawdCd,
+        dealYmd,
+      });
+      const pageTransactions = pages.flatMap((page) => page.transactions);
+      fetchedBatches.push({ dealYmd, pages, transactions: pageTransactions });
+    }
+
+    result = buildMolitTransactionSyncResult({
+      addressHints,
+      fetchedBatches,
+      legalDongCd,
+      mode: dealYmds.mode,
+      sourceNames,
+    });
+  }
+
+  return result;
+}
+
+function buildMolitTransactionSyncResult({
+  addressHints,
+  fetchedBatches,
+  legalDongCd,
+  mode,
+  sourceNames,
+}: {
+  addressHints: MolitAddressHints;
+  fetchedBatches: FetchedMolitTransactionBatch[];
+  legalDongCd: string | null;
+  mode: ResolvedMolitDealYmds["mode"];
+  sourceNames: string[];
+}): MolitTransactionSyncResult {
+  const attempts: MolitTransactionSyncAttempt[] = [];
+  const matchedPageRecords: MolitMatchedPageRecord[] = [];
   const allFetchedTransactions = fetchedBatches.flatMap(
     (batch) => batch.transactions,
   );
@@ -165,8 +231,7 @@ export async function collectMolitTransactionSyncResult({
       transactions: allFetchedTransactions,
       sourceNames,
       legalDongCd,
-      addressHints: resolvedAddressHints,
-      allowFuzzyNameMatch,
+      addressHints,
     }),
   );
   const candidateTransactions: MolitApartmentTrade[] = [];
@@ -196,7 +261,7 @@ export async function collectMolitTransactionSyncResult({
     }
   }
 
-  if (dealYmds.mode === "manual" && !selectedDealYmd) {
+  if (mode === "manual" && !selectedDealYmd) {
     const manualBatch = fetchedBatches[0];
 
     if (manualBatch) {
@@ -214,7 +279,7 @@ export async function collectMolitTransactionSyncResult({
     transactions: candidateTransactions,
     sourceNames,
     legalDongCd,
-    addressHints: resolvedAddressHints,
+    addressHints,
   });
 
   return {
@@ -222,10 +287,21 @@ export async function collectMolitTransactionSyncResult({
     candidateNames,
     matchedDealYmds: getMatchedDealYmds(transactions),
     matchedPageRecords,
+    matchedSourceNames: getMatchedMolitSourceNames(transactions),
     selectedDealYmd,
     totalCount: attempts.reduce((sum, attempt) => sum + attempt.totalCount, 0),
     transactions,
   };
+}
+
+function getMatchedMolitSourceNames(transactions: MolitApartmentTrade[]) {
+  return Array.from(
+    new Set(
+      transactions
+        .map((transaction) => transaction.apartmentNameFromSource?.trim() ?? "")
+        .filter(Boolean),
+    ),
+  );
 }
 
 function addLegalAddressHints(
@@ -306,16 +382,6 @@ function isRoadNameToken(value: string) {
 
 function isRoadAddress(value: string | null | undefined) {
   return getAddressTokens(value).some(isRoadNameToken);
-}
-
-function getLegacyMolitAddressHints(addressTokens: string[]): MolitAddressHints {
-  return {
-    lotNumbers: addressTokens
-      .map((token) => normalizeMolitAddressNumber(token))
-      .filter((token): token is string => token !== null),
-    roadBuildingNumbers: [],
-    legalDongNames: [],
-  };
 }
 
 export function getMatchedDealYmds(transactions: MolitApartmentTrade[]) {

@@ -193,6 +193,8 @@ git commit -m "Improve MOLIT apartment matching"
 - Modify: `src/app/api/apartments/[id]/transactions/sync/route.ts`
 - Modify: `src/lib/services/apartment-transaction-sync.ts`
 - Modify: `src/lib/services/apartment-transaction-sync.test.ts`
+- Modify: `src/lib/services/molit-transaction-matching.ts`
+- Modify: `src/lib/services/molit-transaction-matching.test.ts`
 - Create: `src/lib/services/molit-candidate-presentation.ts`
 - Create: `src/lib/services/molit-candidate-presentation.test.ts`
 - Modify: `src/components/apartments/apartment-detail-client.tsx`
@@ -202,6 +204,8 @@ git commit -m "Improve MOLIT apartment matching"
 - Recent collection accepts a 36-month list plus `primaryMonthCount: 12`, stopping after month 12 when any primary-window match exists.
 - Sync result exposes distinct `matchedSourceNames` so automatically discovered MOLIT names can be persisted as aliases.
 - Presentation helper maps reason codes to `지번 일치`, `도로명 일치`, `이름 일치`, `이름 유사 N%`.
+- The comprehensive client flow resolves/syncs K-apt basic info before requesting MOLIT transactions, so a newly added apartment can use the legal-lot hint on its first full lookup.
+- Candidate cards retain representative MOLIT legal/road addresses even when those addresses are not exact matches; reason codes separately identify exact evidence.
 
 - [ ] **Step 1: Write the failing adaptive-window test**
 
@@ -217,6 +221,8 @@ expect(formatMolitCandidateReasons({
   nameSimilarity: 0.86,
 })).toEqual(["지번 일치", "이름 유사 86%"]);
 ```
+
+Also assert that a same-dong candidate without exact address evidence still contains its representative `addressFromSource`, allowing the operator to distinguish similarly named complexes.
 
 - [ ] **Step 3: Run focused tests and verify RED**
 
@@ -245,6 +251,8 @@ supabase
 ```
 
 Build hints from basic-info addresses and classify apartment fallback addresses. For automatic recent syncs, request 36 months with `primaryMonthCount: 12`; explicit `dealYmd`/`months` requests keep their selected scope. Upsert each newly matched source name as a `source: "molit"` alias after transaction persistence.
+
+Move the comprehensive client flow's transaction request after K-apt code resolution/basic-info sync. Even when K-apt sync fails or requires manual selection, continue with the transaction request using fallback apartment addresses.
 
 - [ ] **Step 6: Add candidate reason presentation and UI badges**
 
